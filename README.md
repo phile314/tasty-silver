@@ -8,7 +8,4 @@ To pass the test, this output file should be identical to the corresponding
 Maintainers
 -----------
 
-[Roman Cheplyaka](https://github.com/feuerbach) is the primary maintainer.
-
-[Oliver Charles](https://github.com/ocharles) is the backup maintainer. Please
-get in touch with him if the primary maintainer cannot be reached.
+[Philipp Hausmann](https://github.com/phile314) is the primary maintainer.
