@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, PatternGuards, DeriveDataTypeable #-}
 -- | Golden test management
-module Test.Tasty.Golden.Manage
+module Test.Tasty.Silver.Manage
   (
   -- * Command line helpers
     defaultMain
@@ -17,7 +17,7 @@ module Test.Tasty.Golden.Manage
 import Test.Tasty hiding (defaultMain)
 import Test.Tasty.Runners
 import Test.Tasty.Options
-import Test.Tasty.Golden.Internal
+import Test.Tasty.Silver.Internal
 import Data.Typeable
 import Data.Tagged
 import Data.Proxy

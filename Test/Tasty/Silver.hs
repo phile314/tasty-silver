@@ -1,6 +1,6 @@
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, OverloadedStrings #-}
 {- |
-This module provides a simplified interface. If you want more, see
-"Test.Tasty.Golden.Advanced".
+This module provides a simplified interface. If you want more, see "Test.Tasty.Golden.Advanced".
 
 Note about filenames. They are looked up in the usual way, thus relative
 names are relative to the processes current working directory.
@@ -42,35 +42,38 @@ comparison function when necessary. But most of the time treating the files
 as binary does the job.
 -}
 
-module Test.Tasty.Golden
+module Test.Tasty.Silver
   ( goldenVsFile
-  , goldenVsString
-  , goldenVsFileDiff
-  , goldenVsStringDiff
+  , goldenVsProg
+  , goldenVsAction
+
+  , printProcResult
+
   , writeBinaryFile
   , findByExtension
   )
   where
 
 import Test.Tasty.Providers
-import Test.Tasty.Golden.Advanced
-import Text.Printf
-import qualified Data.ByteString.Lazy as LB
-import System.IO
-import System.IO.Temp
-import System.Process
+import Test.Tasty.Silver.Advanced
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as BS
 import System.Exit
-import System.FilePath
+import Control.Applicative
+import qualified Data.Text as T
+import System.Process.Text as PT
 import System.Directory
-import Control.Exception
-import Control.Monad
-import Control.DeepSeq
+import System.FilePath
 import qualified Data.Set as Set
+import Control.Monad
+import System.IO
 
 -- trick to avoid an explicit dependency on transformers
 import Control.Monad.Error (liftIO)
+import Data.Text.Encoding
 
--- | Compare a given file contents against the golden file contents
+
+-- | Compare a given file contents against the golden file contents. Assumes that both text files are utf8 encoded.
 goldenVsFile
   :: TestName -- ^ test name
   -> FilePath -- ^ path to the «golden» file (the file that contains correct output)
@@ -78,118 +81,71 @@ goldenVsFile
   -> IO () -- ^ action that creates the output file
   -> TestTree -- ^ the test verifies that the output file contents is the same as the golden file contents
 goldenVsFile name ref new act =
-  goldenTest
+  goldenTest1
     name
-    (vgReadFile ref)
-    (liftIO act >> vgReadFile new)
-    cmp
-    upd
-  where
-  cmp = simpleCmp $ printf "Files '%s' and '%s' differ" ref new
-  upd = LB.writeFile ref
+    (maybe Nothing (Just . decodeUtf8 . BL.toStrict) <$> vgReadFileMaybe ref)
+    (liftIO act >> (decodeUtf8 . BL.toStrict <$> vgReadFile new))
+    textLikeDiff
+    textLikeShow
+    (upd)
+  where upd = BS.writeFile ref . encodeUtf8
 
--- | Compare a given string against the golden file contents
-goldenVsString
+-- | Compares a given file with the output (exit code, stdout, stderr) of a program. Assumes
+-- that the program output is utf8 encoded.
+goldenVsProg
+  :: TestName   -- ^ test name
+  -> FilePath   -- ^ path to the golden file
+  -> FilePath   -- ^ executable to run.
+  -> [String]   -- ^ arguments to pass.
+  -> T.Text     -- ^ stdin
+  -> TestTree
+goldenVsProg name ref cmd args inp =
+  goldenVsAction name ref runProg printProcResult
+  where runProg = PT.readProcessWithExitCode cmd args inp
+
+-- | Compare something text-like against the golden file contents.
+-- For the conversion of inputs to text you may want to use the Data.Text.Encoding
+-- or/and System.Process.Text modules.
+goldenVsAction
   :: TestName -- ^ test name
   -> FilePath -- ^ path to the «golden» file (the file that contains correct output)
-  -> IO LB.ByteString -- ^ action that returns a string
-  -> TestTree -- ^ the test verifies that the returned string is the same as the golden file contents
-goldenVsString name ref act =
-  goldenTest
+  -> IO a -- ^ action that returns a text-like value.
+  -> (a -> T.Text) -- ^ Converts a value to it's textual representation.
+  -> TestTree -- ^ the test verifies that the returned textual representation
+              --   is the same as the golden file contents
+goldenVsAction name ref act toTxt =
+  goldenTest1
     name
-    (vgReadFile ref)
-    (liftIO act)
-    cmp
-    upd
-  where
-  cmp x y = simpleCmp msg x y
-    where
-    msg = printf "Test output was different from '%s'. It was: %s" ref (show y)
-  upd = LB.writeFile ref
+    (maybe Nothing (Just . decodeUtf8 . BL.toStrict) <$> vgReadFileMaybe ref)
+    (liftIO (toTxt <$> act))
+    textLikeDiff
+    textLikeShow
+    (upd . BL.fromStrict . encodeUtf8)
+  where upd = BL.writeFile ref
 
-simpleCmp :: Eq a => String -> a -> a -> IO (Maybe String)
-simpleCmp e x y =
-  return $ if x == y then Nothing else Just e
+textLikeShow :: T.Text -> GShow
+textLikeShow = ShowText
 
--- | Same as 'goldenVsFile', but invokes an external diff command.
-goldenVsFileDiff
-  :: TestName -- ^ test name
-  -> (FilePath -> FilePath -> [String])
-    -- ^ function that constructs the command line to invoke the diff
-    -- command.
-    --
-    -- E.g.
-    --
-    -- >\ref new -> ["diff", "-u", ref, new]
-  -> FilePath -- ^ path to the golden file
-  -> FilePath -- ^ path to the output file
-  -> IO ()    -- ^ action that produces the output file
-  -> TestTree
-goldenVsFileDiff name cmdf ref new act =
-  goldenTest
-    name
-    (return ())
-    (liftIO act)
-    cmp
-    upd
-  where
-  cmd = cmdf ref new
-  cmp _ _ | null cmd = error "goldenVsFileDiff: empty command line"
-  cmp _ _ = do
-    (_, Just sout, _, pid) <- createProcess (proc (head cmd) (tail cmd)) { std_out = CreatePipe }
-    -- strictly read the whole output, so that the process can terminate
-    out <- hGetContents sout
-    evaluate . rnf $ out
+textLikeDiff :: T.Text -> T.Text -> GDiff
+textLikeDiff x y | x == y    = Equal
+textLikeDiff x y | otherwise =  DiffText x y
 
-    r <- waitForProcess pid
-    return $ case r of
-      ExitSuccess -> Nothing
-      _ -> Just out
 
-  upd _ = LB.readFile new >>= LB.writeFile ref
+-- | Converts the output of a process produced by e.g. System.Process.Text to a textual representation.
+-- Stdout/stderr are written seperately, any ordering relation between the two streams
+-- is lost in the translation.
+printProcResult :: (ExitCode, T.Text, T.Text) -> T.Text
+-- first line is exit code, then out block, then err block
+printProcResult (ex, a, b) = T.unlines (["ret > " `T.append` T.pack (show ex)]
+                            ++ addPrefix "out >" a ++ addPrefix "err >" b)
+    where addPrefix _    t | T.null t  = []
+          addPrefix pref t | otherwise = map (f pref) (T.splitOn "\n" t)
+          -- don't add trailing whitespace if line is empty. git diff will mark trailing whitespace
+          -- as error, which looks distracting.
+          f pref ln | T.null ln = pref
+          f pref ln | otherwise = pref `T.append` " " `T.append` ln
 
--- | Same as 'goldenVsString', but invokes an external diff command.
-goldenVsStringDiff
-  :: TestName -- ^ test name
-  -> (FilePath -> FilePath -> [String])
-    -- ^ function that constructs the command line to invoke the diff
-    -- command.
-    --
-    -- E.g.
-    --
-    -- >\ref new -> ["diff", "-u", ref, new]
-  -> FilePath -- ^ path to the golden file
-  -> IO LB.ByteString -- ^ action that returns a string
-  -> TestTree
-goldenVsStringDiff name cmdf ref act =
-  goldenTest
-    name
-    (vgReadFile ref)
-    (liftIO act)
-    cmp
-    upd
-  where
-  template = takeFileName ref <.> "actual"
-  cmp _ actBS = withSystemTempFile template $ \tmpFile tmpHandle -> do
 
-    -- Write act output to temporary ("new") file
-    LB.hPut tmpHandle actBS >> hFlush tmpHandle
-
-    let cmd = cmdf ref tmpFile
-
-    when (null cmd) $ error "goldenVsFileDiff: empty command line"
-
-    (_, Just sout, _, pid) <- createProcess (proc (head cmd) (tail cmd)) { std_out = CreatePipe }
-    -- strictly read the whole output, so that the process can terminate
-    out <- hGetContents sout
-    evaluate . rnf $ out
-
-    r <- waitForProcess pid
-    return $ case r of
-      ExitSuccess -> Nothing
-      _ -> Just (printf "Test output was different from '%s'. Output of %s:\n%s" ref (show cmd) out)
-
-  upd = LB.writeFile ref
 
 -- | Like 'writeFile', but uses binary mode
 writeBinaryFile :: FilePath -> String -> IO ()

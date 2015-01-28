@@ -1,6 +1,6 @@
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Golden
+import Test.Tasty.Silver
 import System.IO.Temp
 import System.FilePath
 import System.Directory

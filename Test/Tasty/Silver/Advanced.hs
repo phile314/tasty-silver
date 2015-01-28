@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes, OverloadedStrings #-}
-module Test.Tasty.Golden.Advanced
+module Test.Tasty.Silver.Advanced
   ( -- * The main function
     goldenTest1,
 
@@ -17,7 +17,7 @@ module Test.Tasty.Golden.Advanced
 where
 
 import Test.Tasty.Providers
-import Test.Tasty.Golden.Internal
+import Test.Tasty.Silver.Internal
 import Control.Applicative
 import qualified Data.Text as T
 

@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes, ExistentialQuantification, DeriveDataTypeable,
     MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
-module Test.Tasty.Golden.Internal where
+module Test.Tasty.Silver.Internal where
 
 import Control.Applicative
 import Control.Monad.Cont

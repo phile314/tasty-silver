@@ -1,6 +1,6 @@
-name:                tasty-golden
-version:             2.2.2.4
-synopsis:            Golden tests support for tasty
+name:                tasty-silver
+version:             3.0
+synopsis:            Golden tests support for tasty. Fork of tasty-golden.
 description:
   This package provides support for «golden testing».
 
@@ -12,27 +12,26 @@ license:             MIT
 license-file:        LICENSE
 Homepage:            https://github.com/feuerbach/tasty-golden
 Bug-reports:         https://github.com/feuerbach/tasty-golden/issues
-author:              Roman Cheplyaka
-maintainer:          Roman Cheplyaka <roma@ro-che.info>
+author:              Roman Cheplyaka, Philipp Hausmann and others
+maintainer:          Philipp Hausmann
 -- copyright:           
 category:            Testing
 build-type:          Simple
 cabal-version:       >=1.14
 extra-source-files:  CHANGELOG.md
 
-Source-repository head
-  type:     git
-  location: git://github.com/feuerbach/tasty-golden.git
+--Source-repository head
+--  type:     git
+--  location: git://github.com/feuerbach/tasty-golden.git
 
 library
   Default-language:
     Haskell2010
-  exposed-modules:     Test.Tasty.Golden
-                       Test.Tasty.Golden.Advanced
-                       Test.Tasty.Golden.Manage
-                       Test.Tasty.Golden.Simple
+  exposed-modules:     Test.Tasty.Silver
+                       Test.Tasty.Silver.Advanced
+                       Test.Tasty.Silver.Manage
   other-modules:
-                       Test.Tasty.Golden.Internal
+                       Test.Tasty.Silver.Internal
 
   ghc-options: -Wall
 
@@ -66,7 +65,7 @@ Test-suite test
       base >= 4 && < 5
     , tasty >= 0.8
     , tasty-hunit
-    , tasty-golden
+    , tasty-silver
     , filepath
     , directory
     , process
