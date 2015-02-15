@@ -9,9 +9,13 @@ import Data.Typeable (Typeable)
 import Data.ByteString.Lazy as LB
 import System.IO
 import System.IO.Error
-import Test.Tasty.Providers
 import qualified Data.Text as T
 import Data.Maybe
+import Options.Applicative
+import Data.Tagged
+import Data.Proxy
+import Test.Tasty.Providers
+import Test.Tasty.Options
 
 -- | See 'goldenTest1' for explanation of the fields
 data Golden =
@@ -23,6 +27,23 @@ data Golden =
         (a -> IO GShow)                            -- How to produce a show.
         (a -> IO ())                            -- Update golden value.
   deriving Typeable
+
+
+-- | This option, when set to 'True', specifies that we should run in the
+-- «accept tests» mode
+newtype AcceptTests = AcceptTests Bool
+  deriving (Eq, Ord, Typeable)
+instance IsOption AcceptTests where
+  defaultValue = AcceptTests False
+  parseValue = fmap AcceptTests . safeRead
+  optionName = return "accept"
+  optionHelp = return "Accept current results of golden tests"
+  optionCLParser =
+    fmap AcceptTests $
+    switch
+      (  long (untag (optionName :: Tagged AcceptTests String))
+      <> help (untag (optionHelp :: Tagged AcceptTests String))
+      )
 
 -- | An action that yields a value (either golden or tested).
 --
@@ -79,19 +100,26 @@ data GShow
   = ShowText T.Text     -- ^ Show the given text.
 
 instance IsTest Golden where
-  run _ golden _ = runGolden golden
-  testOptions = return []
+  run opts golden _ = runGolden golden (lookupOption opts)
+  testOptions = return [Option (Proxy :: Proxy AcceptTests)]
 
-runGolden :: Golden -> IO Result
-runGolden (Golden getGolden getActual cmp _ _) = do
+runGolden :: Golden -> AcceptTests -> IO Result
+runGolden (Golden getGolden getActual cmp _ upd) (AcceptTests accept) = do
   vgRun $ do
-    new <- getActual
     ref' <- getGolden
     case ref' of
+      Nothing | accept -> do
+            new <- getActual
+            liftIO $ upd new
+            return $ testPassed "Created golden file."
       Nothing -> return $ testFailed "Missing golden value."
       Just ref -> do
+        new <- getActual
         -- Output could be arbitrarily big, so don't even try to say what wen't wrong.
         cmp' <- liftIO $ cmp ref new
         case cmp' of
           Equal -> return $ testPassed ""
+          _ | accept -> do
+                liftIO (upd new)
+                return $ testPassed "Updated golden file."
           _     -> return $ testFailed "Result did not match expected output. Use interactive mode to see the full output."

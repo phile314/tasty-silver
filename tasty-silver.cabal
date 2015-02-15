@@ -29,7 +29,7 @@ library
     Haskell2010
   exposed-modules:     Test.Tasty.Silver
                        Test.Tasty.Silver.Advanced
-                       Test.Tasty.Silver.Manage
+                       Test.Tasty.Silver.Interactive
   other-modules:
                        Test.Tasty.Silver.Internal
 
