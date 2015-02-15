@@ -11,6 +11,7 @@ import qualified Data.Text as T
 import Options.Applicative
 import Data.Tagged
 import Data.Proxy
+import Data.Maybe
 import Test.Tasty.Providers
 import Test.Tasty.Options
 
@@ -54,8 +55,8 @@ readFileMaybe path = catchJust
 -- | The comparison/diff result.
 data GDiff
   = Equal -- ^ Values are equal.
-  | DiffText { gActual :: T.Text, gExpected :: T.Text } -- ^ The two values are different, show a diff between the two given texts.
-  | ShowDiffed { gDiff :: T.Text }  -- ^ The two values are different, just show the given text to the user.
+  | DiffText { gReason :: (Maybe String), gActual :: T.Text, gExpected :: T.Text } -- ^ The two values are different, show a diff between the two given texts.
+  | ShowDiffed { gReason :: (Maybe String), gDiff :: T.Text }  -- ^ The two values are different, just show the given text to the user.
 
 -- | How to show a value to the user.
 data GShow
@@ -83,4 +84,5 @@ runGolden (Golden getGolden getActual cmp _ upd) (AcceptTests accept) = do
         _ | accept -> do
               upd new
               return $ testPassed "Updated golden file."
-        _     -> return $ testFailed "Result did not match expected output. Use interactive mode to see the full output."
+        d | isJust (gReason d) -> return $ testFailed $ fromJust $ gReason d
+        _ -> return $ testFailed "Result did not match expected output. Use interactive mode to see full output."

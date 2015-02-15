@@ -126,7 +126,7 @@ textLikeShow = ShowText
 
 textLikeDiff :: T.Text -> T.Text -> GDiff
 textLikeDiff x y | x == y    = Equal
-textLikeDiff x y | otherwise =  DiffText x y
+textLikeDiff x y | otherwise =  DiffText Nothing x y
 
 
 -- | Converts the output of a process produced by e.g. System.Process.Text to a textual representation.

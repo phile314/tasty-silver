@@ -136,7 +136,7 @@ runTestsInteractive opts tests = do
                     tryAccept n upd new
 
 showDiff :: TestName -> GDiff -> IO ()
-showDiff n (DiffText tGold tAct) = do
+showDiff n (DiffText _ tGold tAct) = do
   withSystemTempFile (n <.> "golden") (\fGold hGold -> do
     withSystemTempFile (n <.> "actual") (\fAct hAct -> do
       hSetBinaryMode hGold True
@@ -149,7 +149,7 @@ showDiff n (DiffText tGold tAct) = do
         ["-c", "git diff --color=always --no-index --text " ++ fGold ++ " " ++ fAct ++ " | less -r > /dev/tty"]
       )
     )
-showDiff n (ShowDiffed t) = showInLess n t
+showDiff n (ShowDiffed _ t) = showInLess n t
 showDiff _ Equal = error "Can't show diff for equal values..."
 
 showValue :: TestName -> GShow -> IO ()

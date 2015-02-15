@@ -40,7 +40,7 @@ goldenTest t golden test cmp upd = goldenTestIO t (Just <$> golden) test runCmp 
         runCmp a b = do
             cmp' <- cmp a b
             case cmp' of
-                Just d -> return $ ShowDiffed $ T.pack d
+                Just d -> return $ ShowDiffed Nothing (T.pack d)
                 Nothing -> return Equal
         shw _ = return $ ShowText "Old API does not support showing the actual value. Use the --accept mode or use the new API."
 
