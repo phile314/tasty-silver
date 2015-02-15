@@ -49,7 +49,6 @@ module Test.Tasty.Silver
 
   , printProcResult
 
-  , writeBinaryFile
   , findByExtension
   )
   where
@@ -66,7 +65,6 @@ import System.Directory
 import System.FilePath
 import qualified Data.Set as Set
 import Control.Monad
-import System.IO
 
 -- trick to avoid an explicit dependency on transformers
 import Control.Monad.Error (liftIO)
@@ -83,8 +81,8 @@ goldenVsFile
 goldenVsFile name ref new act =
   goldenTest1
     name
-    (maybe Nothing (Just . decodeUtf8 . BL.toStrict) <$> vgReadFileMaybe ref)
-    (liftIO act >> (decodeUtf8 . BL.toStrict <$> vgReadFile new))
+    (maybe Nothing (Just . decodeUtf8) <$> readFileMaybe ref)
+    (act >> (decodeUtf8 <$> BS.readFile new))
     textLikeDiff
     textLikeShow
     (upd)
@@ -116,7 +114,7 @@ goldenVsAction
 goldenVsAction name ref act toTxt =
   goldenTest1
     name
-    (maybe Nothing (Just . decodeUtf8 . BL.toStrict) <$> vgReadFileMaybe ref)
+    (maybe Nothing (Just . decodeUtf8) <$> readFileMaybe ref)
     (liftIO (toTxt <$> act))
     textLikeDiff
     textLikeShow
@@ -146,10 +144,6 @@ printProcResult (ex, a, b) = T.unlines (["ret > " `T.append` T.pack (show ex)]
           f pref ln | otherwise = pref `T.append` " " `T.append` ln
 
 
-
--- | Like 'writeFile', but uses binary mode
-writeBinaryFile :: FilePath -> String -> IO ()
-writeBinaryFile f txt = withBinaryFile f WriteMode (\hdl -> hPutStr hdl txt)
 
 -- | Find all files in the given directory and its subdirectories that have
 -- the given extensions.

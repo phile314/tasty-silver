@@ -96,7 +96,7 @@ runTestsInteractive opts tests = do
 
             -- we can't run any update inside the vg monad,
             -- as the golden file might still be open
-            (pFail, pReject, act) <- liftIO $ vgRun $ do
+            (pFail, pReject, act) <- liftIO $ do
               tested <- getActual
 
               -- read golden

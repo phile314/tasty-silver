@@ -9,10 +9,8 @@ module Test.Tasty.Silver.Advanced
     GShow (..),
     GDiff (..),
 
-    -- * ValueGetter monad
-    ValueGetter(..),
-    vgReadFile,
-    vgReadFileMaybe
+    -- * reading files
+    readFileMaybe
   )
 where
 
@@ -24,8 +22,8 @@ import qualified Data.Text as T
 -- | A very general testing function. Use 'goldenTest1' instead if you can.
 goldenTest
   :: TestName -- ^ test name
-  -> (forall r . ValueGetter r a) -- ^ get the golden correct value
-  -> (forall r . ValueGetter r a) -- ^ get the tested value
+  -> (IO a) -- ^ get the golden correct value
+  -> (IO a) -- ^ get the tested value
   -> (a -> a -> IO (Maybe String))
     -- ^ comparison function.
     --
@@ -50,8 +48,8 @@ goldenTest t golden test cmp upd = goldenTestIO t (Just <$> golden) test runCmp 
 -- | A very general testing function.
 goldenTest1
   :: TestName -- ^ test name
-  -> (forall r . ValueGetter r (Maybe a)) -- ^ get the golden correct value
-  -> (forall r . ValueGetter r a) -- ^ get the tested value
+  -> (IO (Maybe a)) -- ^ get the golden correct value
+  -> (IO a) -- ^ get the tested value
   -> (a -> a -> GDiff)
     -- ^ comparison function.
     --
@@ -68,8 +66,8 @@ goldenTest1 t golden test diff shw upd = goldenTestIO t golden test (\a b -> ret
 -- the `goldenTest1` function should be used instead.
 goldenTestIO
   :: TestName -- ^ test name
-  -> (forall r . ValueGetter r (Maybe a)) -- ^ get the golden correct value
-  -> (forall r . ValueGetter r a) -- ^ get the tested value
+  -> (IO (Maybe a)) -- ^ get the golden correct value
+  -> (IO a) -- ^ get the tested value
   -> (a -> a -> IO GDiff)
     -- ^ comparison function.
     --
