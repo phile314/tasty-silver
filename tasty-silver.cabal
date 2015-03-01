@@ -38,7 +38,6 @@ library
 
   build-depends:
     ansi-terminal >= 0.6.2.1 && < 0.7,
-    array >= 0.5.0.0 && <0.6,
     async,
     base ==4.*,
     bytestring,
