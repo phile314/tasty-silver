@@ -4,6 +4,7 @@ module Test.Tasty.Silver.Internal where
 
 import Control.Applicative
 import Control.Exception
+import Control.Monad.Identity
 import Data.Typeable (Typeable)
 import Data.ByteString as SB
 import System.IO.Error
@@ -63,26 +64,53 @@ data GShow
   = ShowText T.Text     -- ^ Show the given text.
 
 instance IsTest Golden where
-  run opts golden _ = runGolden golden (lookupOption opts)
+  run opts golden _ = do
+    (r, gr) <- runGolden golden
+    let (AcceptTests accept) = lookupOption opts :: AcceptTests
+    case gr of
+      GRNoGolden act _ upd | accept -> do
+            act >>= upd
+            return $ testPassed "Created golden file."
+      GRDifferent _ act _ upd | accept -> do
+            upd act
+            return $ testPassed "Updated golden file."
+      _ -> return r
+
   testOptions = return [Option (Proxy :: Proxy AcceptTests)]
 
-runGolden :: Golden -> AcceptTests -> IO Result
-runGolden (Golden getGolden getActual cmp _ upd) (AcceptTests accept) = do
+type GoldenResult = GoldenResult' IO
+type GoldenResultI = GoldenResult' Identity
+
+data GoldenResult' m
+  = GREqual
+  | forall a . GRDifferent
+        (a)     -- golden
+        (a)     -- actual
+        (GDiff) -- diff
+        (a -> IO ()) -- update
+  | forall a . GRNoGolden
+        (m a) -- compute actual (we don't want to compute it if it is not used)
+        (a -> IO GShow) --show
+        (a -> IO ()) -- update
+
+runGolden :: Golden -> IO (Result, GoldenResult)
+runGolden (Golden getGolden getActual cmp shw upd) = do
   ref' <- getGolden
   case ref' of
-    Nothing | accept -> do
-          new <- getActual
-          upd new
-          return $ testPassed "Created golden file."
-    Nothing -> return $ testFailed "Missing golden value."
+    Nothing -> return (testFailed "Missing golden value.", GRNoGolden getActual shw upd)
     Just ref -> do
       new <- getActual
       -- Output could be arbitrarily big, so don't even try to say what wen't wrong.
       cmp' <- cmp ref new
       case cmp' of
-        Equal -> return $ testPassed ""
-        _ | accept -> do
-              upd new
-              return $ testPassed "Updated golden file."
-        d | isJust (gReason d) -> return $ testFailed $ fromJust $ gReason d
-        _ -> return $ testFailed "Result did not match expected output. Use interactive mode to see full output."
+        Equal -> return (testPassed "", GREqual)
+        d -> let r = fromMaybe "Result did not match expected output. Use interactive mode to see full output." (gReason d)
+              in return (testFailed r, GRDifferent ref new cmp' upd)
+
+forceGoldenResult :: GoldenResult -> IO GoldenResultI
+forceGoldenResult gr = case gr of
+            (GRNoGolden act shw upd) -> do
+                act' <- act
+                return $ GRNoGolden (Identity act') shw upd
+            (GRDifferent a b c d) -> return $ GRDifferent a b c d
+            (GREqual) -> return GREqual
