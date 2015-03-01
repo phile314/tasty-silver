@@ -66,8 +66,6 @@ import System.FilePath
 import qualified Data.Set as Set
 import Control.Monad
 
--- trick to avoid an explicit dependency on transformers
-import Control.Monad.Error (liftIO)
 import Data.Text.Encoding
 
 
@@ -115,7 +113,7 @@ goldenVsAction name ref act toTxt =
   goldenTest1
     name
     (maybe Nothing (Just . decodeUtf8) <$> readFileMaybe ref)
-    (liftIO (toTxt <$> act))
+    (toTxt <$> act)
     textLikeDiff
     textLikeShow
     (upd . BL.fromStrict . encodeUtf8)
