@@ -104,7 +104,7 @@ runGolden (Golden getGolden getActual cmp shw upd) = do
       cmp' <- cmp ref new
       case cmp' of
         Equal -> return (testPassed "", GREqual)
-        d -> let r = fromMaybe "Result did not match expected output. Use interactive mode to see full output." (gReason d)
+        d -> let r = fromMaybe "Result did not match expected output. Use interactive mode (-i) to see full output." (gReason d)
               in return (testFailed r, GRDifferent ref new cmp' upd)
 
 forceGoldenResult :: GoldenResult -> IO GoldenResultI

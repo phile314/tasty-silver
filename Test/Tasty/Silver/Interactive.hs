@@ -65,12 +65,7 @@ instance IsOption Interactive where
   parseValue = fmap Interactive . safeRead
   optionName = return "interactive"
   optionHelp = return "Run tests in interactive mode."
-  optionCLParser =
-    fmap Interactive $
-    switch
-      (  long (untag (optionName :: Tagged Interactive String))
-      <> help (untag (optionHelp :: Tagged Interactive String))
-      )
+  optionCLParser = flagCLParser (Just 'i') (Interactive True)
 
 
 data ResultStatus = RPass | RFail | RInteract GoldenResultI
