@@ -1,15 +1,28 @@
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.Silver
+import Test.Tasty.Silver.Interactive hiding (defaultMain)
+import Test.Tasty.Runners
+import Test.Tasty.Silver.Advanced
+import Test.Tasty.Silver.Internal
+import Test.Tasty.Options
+
+import Data.Monoid
 import System.IO.Temp
 import System.FilePath
 import System.Directory
 import Data.List (sort)
+import Control.Concurrent.MVar
+import Control.Monad.IO.Class
 
 touch f = writeFile f ""
 
-main = defaultMain $
-  testCase "findByExtension" $
+main = defaultMain $ testGroup "tests" [testFindByExt, testWithResource]
+
+
+
+testFindByExt :: TestTree
+testFindByExt = testCase "findByExtension" $
     withSystemTempDirectory "golden-test" $ \basedir -> do
 
       setCurrentDirectory basedir
@@ -27,3 +40,21 @@ main = defaultMain $
       files <- findByExtension [".c", ".h"] "."
       sort files @?= sort
         ["./d1/d2/h1.c","./d1/g1.c","./f1.c","./f2.h"]
+
+testWithResource :: TestTree
+testWithResource = testCase "withResource" $ do
+    -- check if resources are properly initialized
+    testRes <- newMVar False
+    let acq = newMVar True
+        free v = swapMVar v False >> return ()
+        test = \v -> goldenTest1 "check res" (return Nothing) (liftIO $ testAction v) (\_ _ -> Equal) (\_ -> ShowText mempty) upd
+        upd x = assertBool "Incorrect result" x >> return ()
+        testAction = \v -> v >>= readMVar >>= assertBool "Resource not initialized." >> return True
+        tree = withResource acq free test
+
+    let r = tryIngredients [consoleTestReporter] (singleOption $ AcceptTests True) tree
+    case r of
+      Just r' -> do
+        success <- r'
+        assertBool "Test should succeed." success
+      Nothing -> assertFailure "Test broken"

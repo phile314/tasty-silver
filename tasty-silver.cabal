@@ -31,7 +31,6 @@ library
                        Test.Tasty.Silver.Advanced
                        Test.Tasty.Silver.Interactive
                        Test.Tasty.Silver.Interactive.Run
-  other-modules:
                        Test.Tasty.Silver.Internal
 
   ghc-options: -Wall
@@ -73,3 +72,4 @@ Test-suite test
     , directory
     , process
     , temporary-rc
+    , transformers >= 0.3
