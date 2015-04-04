@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.1
+-------------
+
+* Report success instead of failure if new result is accepted in interactive mode.
+
 Version 3.1
 -----------
 

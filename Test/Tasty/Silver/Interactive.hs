@@ -30,7 +30,7 @@ import Data.Typeable
 import Data.Tagged
 import Data.Maybe
 import Data.Monoid
-#if __GLASGOW_HASKELL__ < 710
+#if __GLASGOW_HASKELL__ < 708
 import Data.Foldable (foldMap)
 #endif
 import Data.Char
@@ -130,7 +130,7 @@ runTestsInteractive opts tests = do
       let
         outp = produceOutput opts tests
 
-      case () of { _
+      stats <- case () of { _
         | hideSuccesses && isTerm ->
             consoleOutputHidingSuccesses outp smap gmap
         | hideSuccesses && not isTerm ->
@@ -139,7 +139,7 @@ runTestsInteractive opts tests = do
       }
 
       return $ \time -> do
-            stats <- computeStatistics smap
+--            stats <- computeStatistics smap
             printStatistics stats time
             return $ statFailures stats == 0
 
@@ -206,10 +206,10 @@ tryAccept pref nm upd new = do
 -- printing. It lets us have several different printing modes (normal; print
 -- failures only; quiet).
 data TestOutput
-  = PrintTest
+  = HandleTest
       {- test name, used for golden lookup #-} (TestName)
       {- print test name   -} (IO ())
-      {- print test result -} ((Result, ResultStatus) -> IO ())
+      {- print test result -} ((Result, ResultStatus) -> IO Statistics)
   | PrintHeading (IO ()) TestOutput
   | Skip
   | Seq TestOutput TestOutput
@@ -241,7 +241,7 @@ produceOutput opts tree =
           printf "%s%s: %s" (indent level) name align
 
         printTestResult (result, resultStatus) = do
-          result' <- case resultStatus of
+          (result', stat') <- case resultStatus of
             RInteract (GRNoGolden a shw upd) -> do
                 printf "Golden value missing. Press <enter> to show actual value.\n"
                 _ <- getLine
@@ -249,13 +249,27 @@ produceOutput opts tree =
                 shw' <- shw a'
                 showValue name shw'
                 isUpd <- tryAccept pref name upd a'
-                return $ if isUpd then testPassed "Created golden value." else testFailed "Golden value missing."
+                return (
+                    if isUpd
+                    then ( testPassed "Created golden value."
+                         , mempty { statCreatedGolden = 1 } )
+                    else ( testFailed "Golden value missing."
+                         , mempty { statFailures = 1 } )
+                    )
             RInteract (GRDifferent _ a diff upd) -> do
                 printf "Golden value differs from actual value.\n"
                 showDiff name diff
                 isUpd <- tryAccept pref name upd a
-                return $ if isUpd then testPassed "Updated golden value." else testFailed "Golden value does not match actual output."
-            _ -> return result
+                return (
+                    if isUpd
+                    then ( testPassed "Updated golden value."
+                         , mempty { statUpdatedGolden = 1 } )
+                    else ( testFailed "Golden value does not match actual output."
+                         , mempty { statFailures = 1 } )
+                    )
+            RInteract _ -> error "Impossible case!"
+            RPass -> return (result, mempty { statSuccesses = 1 })
+            RFail -> return (result, mempty { statFailures = 1 })
           rDesc <- formatMessage $ resultDescription result'
 
           -- use an appropriate printing function
@@ -276,8 +290,9 @@ produceOutput opts tree =
           when (not $ null rDesc) $
             (if resultSuccessful result' then infoOk else infoFail) $
               printf "%s%s\n" (indent $ level + 1) (formatDesc (level+1) rDesc)
+          return stat'
 
-      return $ PrintTest name printTestName printTestResult
+      return $ HandleTest name printTestName printTestResult
 
     handleGroup :: TestName -> Ap (Reader Level) TestOutput -> Ap (Reader Level) TestOutput
     handleGroup name grp = Ap $ do
@@ -299,18 +314,18 @@ produceOutput opts tree =
 foldTestOutput
   :: (?colors :: Bool, Monoid b)
   => (IO () -> IO (Result, ResultStatus)
-    -> ((Result, ResultStatus) -> IO ())
+    -> ((Result, ResultStatus) -> IO Statistics)
     -> b)
   -> (IO () -> b -> b)
   -> TestOutput -> StatusMap -> GoldenStatusMap -> b
 foldTestOutput foldTest foldHeading outputTree smap gmap =
   flip evalState 0 $ getApp $ go outputTree where
-  go (PrintTest nm printName printResult) = Ap $ do
+  go (HandleTest nm printName handleResult) = Ap $ do
     ix <- get
     put $! ix + 1
     let
       readStatusVar = getResultWithGolden smap gmap nm ix
-    return $ foldTest printName readStatusVar printResult
+    return $ foldTest printName readStatusVar handleResult
   go (PrintHeading printName printBody) = Ap $
     foldHeading printName <$> getApp (go printBody)
   go (Seq a b) = mappend (go a) (go b)
@@ -322,75 +337,90 @@ foldTestOutput foldTest foldHeading outputTree smap gmap =
 -- TestOutput modes
 --------------------------------------------------
 -- {{{
-consoleOutput :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO ()
+consoleOutput :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO Statistics
 consoleOutput outp smap gmap =
-  getTraversal . fst $ foldTestOutput foldTest foldHeading outp smap gmap
+  getApp . fst $ foldTestOutput foldTest foldHeading outp smap gmap
   where
-    foldTest printName getResult printResult =
+    foldTest printName getResult handleResult =
+      (Ap $ do
+        _ <- printName
+        r <- getResult
+        handleResult r
+--        return (Any True, stats)
+      , Any True)
+{-
       ( Traversal $ do
           _ <- printName
           r <- getResult
-          printResult r
-      , Any True)
+          stats <- printResult r
+          return ()
+      , Any True
+      , stats
+      )-}
     foldHeading printHeading (printBody, Any nonempty) =
-      ( Traversal $ do
-          when nonempty $ printHeading >> getTraversal printBody
-      , Any nonempty
-      )
+      (Ap $ do
+        when nonempty $ printHeading
+        stats <- getApp printBody
+        return stats
+      , Any nonempty )
 
-consoleOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO ()
+consoleOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO Statistics
 consoleOutputHidingSuccesses outp smap gmap =
-  void . getApp $ foldTestOutput foldTest foldHeading outp smap gmap
+  snd <$> (getApp $ foldTestOutput foldTest foldHeading outp smap gmap)
   where
-    foldTest printName getResult printResult =
+    foldTest printName getResult handleResult =
       Ap $ do
           _ <- printName
           r <- getResult
           if resultSuccessful (fst r)
-            then clearThisLine >> (return $ Any False)
-            else printResult r >> (return $ Any True)
+            then do
+                clearThisLine
+                return (Any False, mempty { statSuccesses = 1 })
+            else do
+                stats <- handleResult r
+                return (Any True, stats)
 
     foldHeading printHeading printBody =
       Ap $ do
         _ <- printHeading
-        Any failed <- getApp printBody
+        b@(Any failed, _) <- getApp printBody
         unless failed clearAboveLine
-        return $ Any failed
+        return b
 
     clearAboveLine = do cursorUpLine 1; clearThisLine
     clearThisLine = do clearLine; setCursorColumn 0
 
-streamOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO ()
+streamOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO Statistics
 streamOutputHidingSuccesses outp smap gmap =
-  void . flip evalStateT [] . getApp $
-    foldTestOutput foldTest foldHeading outp smap gmap
+  snd <$> (flip evalStateT [] . getApp $
+    foldTestOutput foldTest foldHeading outp smap gmap)
   where
-    foldTest printName getResult printResult =
+    foldTest printName getResult handleResult =
       Ap $ do
           r <- liftIO $ getResult
           if resultSuccessful (fst r)
-            then return $ Any False
+            then return (Any False, mempty { statSuccesses = 1 })
             else do
               stack <- get
               put []
 
-              _ <- liftIO $ do
+              stats <- liftIO $ do
                 sequence_ $ reverse stack
                 _ <- printName
-                printResult r
+                handleResult r
 
-              return $ Any True
+              return (Any True, stats)
 
     foldHeading printHeading printBody =
       Ap $ do
         modify (printHeading :)
-        Any failed <- getApp printBody
+        b@(Any failed, _) <- getApp printBody
         unless failed $
           modify $ \stack ->
             case stack of
               _:rest -> rest
               [] -> [] -- shouldn't happen anyway
-        return $ Any failed
+        return b
 
 -- }}}
 
@@ -400,29 +430,36 @@ streamOutputHidingSuccesses outp smap gmap =
 -- {{{
 
 data Statistics = Statistics
-  { statTotal :: !Int
+  { statSuccesses :: !Int
+  , statUpdatedGolden :: !Int
+  , statCreatedGolden :: !Int
   , statFailures :: !Int
   }
 
 instance Monoid Statistics where
-  Statistics t1 f1 `mappend` Statistics t2 f2 = Statistics (t1 + t2) (f1 + f2)
-  mempty = Statistics 0 0
+  Statistics s1 ug1 cg1 f1 `mappend` Statistics s2 ug2 cg2 f2 = Statistics (s1 + s2) (ug1 + ug2) (cg1 + cg2) (f1 + f2)
+  mempty = Statistics 0 0 0 0
 
-computeStatistics :: StatusMap -> IO Statistics
+{-computeStatistics :: StatusMap -> IO Statistics
 computeStatistics = getApp . foldMap (\var -> Ap $
   (\r -> Statistics 1 (if resultSuccessful r then 0 else 1))
-    <$> getResultFromTVar var)
+    <$> getResultFromTVar var)-}
 
 printStatistics :: (?colors :: Bool) => Statistics -> Time -> IO ()
 printStatistics st time = do
   printf "\n"
 
+  let total = statFailures st + statUpdatedGolden st + statCreatedGolden st + statSuccesses st
+
+  when (statCreatedGolden st > 0) (printf "Created %d golden values.\n" (statCreatedGolden st))
+  when (statUpdatedGolden st > 0) (printf "Updated %d golden values.\n" (statUpdatedGolden st))
+
   case statFailures st of
     0 -> do
-      ok $ printf "All %d tests passed (%.2fs)\n" (statTotal st) time
+      ok $ printf "All %d tests passed (%.2fs)\n" total time
 
     fs -> do
-      fail $ printf "%d out of %d tests failed (%.2fs)\n" fs (statTotal st) time
+      fail $ printf "%d out of %d tests failed (%.2fs)\n" fs total time
 
 data FailureStatus
   = Unknown
