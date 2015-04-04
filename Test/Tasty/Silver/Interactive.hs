@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 -- | Golden test management, interactive mode. Runs the tests, and asks
 -- the user how to proceed in case of failure or missing golden standard.
 module Test.Tasty.Silver.Interactive
@@ -29,9 +30,14 @@ import Data.Typeable
 import Data.Tagged
 import Data.Maybe
 import Data.Monoid
+#if __GLASGOW_HASKELL__ < 710
 import Data.Foldable (foldMap)
+#endif
 import Data.Char
 import qualified Data.IntMap as IntMap
+#if __GLASGOW_HASKELL__ < 708
+import Data.Proxy
+#endif
 import Control.Monad.State hiding (fail)
 import Control.Monad.STM
 import Control.Monad.Reader hiding (fail)
@@ -42,9 +48,8 @@ import Text.Printf
 import qualified Data.Text as T
 import Data.Text.Encoding
 import Options.Applicative
-import System.Process.ByteString.Lazy as PL
+import System.Process.ByteString as PS
 import System.Process
-import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString as BS
 import System.IO
 import System.IO.Temp
@@ -168,9 +173,9 @@ showValue n (ShowText t) = showInLess n t
 showInLess :: String -> T.Text -> IO ()
 showInLess _ t = do
   -- TODO error handling...
-  _ <- PL.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] inp
+  _ <- PS.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] inp
   return ()
-  where inp = B.fromStrict $ encodeUtf8 t
+  where inp = encodeUtf8 t
 
 tryAccept :: String -> TestName -> (a -> IO ()) -> a -> IO Bool
 tryAccept pref nm upd new = do

@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 {- |
 This module provides a simplified interface. If you want more, see "Test.Tasty.Golden.Advanced".
 
@@ -58,7 +59,9 @@ import Test.Tasty.Silver.Advanced
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
 import System.Exit
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import qualified Data.Text as T
 import System.Process.Text as PT
 import System.Directory
@@ -116,8 +119,13 @@ goldenVsAction name ref act toTxt =
     (toTxt <$> act)
     textLikeDiff
     textLikeShow
-    (upd . BL.fromStrict . encodeUtf8)
+    (upd . fromStrict . encodeUtf8)
   where upd = BL.writeFile ref
+#if __GLASGOW_HASKELL__ < 706
+        fromStrict x = BL.fromChunks [x]
+#else
+        fromStrict = BL.fromStrict
+#endif
 
 textLikeShow :: T.Text -> GShow
 textLikeShow = ShowText

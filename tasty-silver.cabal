@@ -33,13 +33,14 @@ library
                        Test.Tasty.Silver.Interactive.Run
                        Test.Tasty.Silver.Internal
 
-  ghc-options: -Wall
+  if impl(ghc >= 7.6)
+    ghc-options: -Wall -Werror
 
   build-depends:
     ansi-terminal >= 0.6.2.1,
     async,
     base ==4.*,
-    bytestring,
+    bytestring >= 0.9.2.1,
     containers,
     directory,
     deepseq,
