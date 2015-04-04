@@ -346,17 +346,7 @@ consoleOutput outp smap gmap =
         _ <- printName
         r <- getResult
         handleResult r
---        return (Any True, stats)
       , Any True)
-{-
-      ( Traversal $ do
-          _ <- printName
-          r <- getResult
-          stats <- printResult r
-          return ()
-      , Any True
-      , stats
-      )-}
     foldHeading printHeading (printBody, Any nonempty) =
       (Ap $ do
         when nonempty $ printHeading
@@ -439,11 +429,6 @@ data Statistics = Statistics
 instance Monoid Statistics where
   Statistics s1 ug1 cg1 f1 `mappend` Statistics s2 ug2 cg2 f2 = Statistics (s1 + s2) (ug1 + ug2) (cg1 + cg2) (f1 + f2)
   mempty = Statistics 0 0 0 0
-
-{-computeStatistics :: StatusMap -> IO Statistics
-computeStatistics = getApp . foldMap (\var -> Ap $
-  (\r -> Statistics 1 (if resultSuccessful r then 0 else 1))
-    <$> getResultFromTVar var)-}
 
 printStatistics :: (?colors :: Bool) => Statistics -> Time -> IO ()
 printStatistics st time = do
