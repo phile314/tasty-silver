@@ -34,7 +34,7 @@ library
                        Test.Tasty.Silver.Internal
 
   if impl(ghc >= 7.6)
-    ghc-options: -Wall -Werror
+    ghc-options: -Wall
 
   build-depends:
     ansi-terminal >= 0.6.2.1,
