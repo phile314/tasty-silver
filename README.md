@@ -1,3 +1,8 @@
+[![Build Status](https://travis-ci.org/phile314/tasty-silver.svg?branch=master)](https://travis-ci.org/phile314/tasty-silver)
+
+Tasty Silver
+============
+
 This package provides support for «golden testing».
 
 A golden test is an IO action that writes its result to a file.
