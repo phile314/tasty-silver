@@ -1,6 +1,20 @@
 Changes
 =======
 
+Version 3.1
+-----------
+
+* Fixed & tested support for GHC 7.4.2 - 7.10.1
+* Added missing lower bound for bytestring
+* Removed upper bounds for most dependencies
+* Enable travis CI builds
+
+Version 3.0 - 3.0.2.2
+-----------
+
+* Refactored API
+* Add interactive mode
+
 Version 2.2.2.4
 ---------------
 
