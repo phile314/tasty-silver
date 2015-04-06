@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 3.1.3
+-------------
+
+* Use package temporary instead of temporary-rc.
+* Re-add command line options for test runner which were accidentally removed.
+
 Version 3.1.2
 -------------
 
