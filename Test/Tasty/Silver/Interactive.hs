@@ -30,6 +30,7 @@ import Data.Typeable
 import Data.Tagged
 import Data.Maybe
 import Data.Monoid
+import qualified Data.Text.IO as TIO
 #if __GLASGOW_HASKELL__ < 708
 import Data.Foldable (foldMap)
 #endif
@@ -57,11 +58,12 @@ import System.FilePath
 import Test.Tasty.Providers
 import qualified Data.Map as M
 import System.Console.ANSI
+import qualified System.Process.Text as PTL
 
 -- | Like @defaultMain@ from the main tasty package, but also includes the
 -- golden test management capabilities.
 defaultMain :: TestTree -> IO ()
-defaultMain = defaultMainWithIngredients [interactiveTests, listingTests, consoleTestReporter]
+defaultMain = defaultMainWithIngredients [listingTests, interactiveTests]
 
 newtype Interactive = Interactive Bool
   deriving (Eq, Ord, Typeable)
@@ -73,19 +75,16 @@ instance IsOption Interactive where
   optionCLParser = flagCLParser (Just 'i') (Interactive True)
 
 
-data ResultStatus = RPass | RFail | RInteract GoldenResultI
+data ResultStatus = RPass | RFail | RMismatch GoldenResultI
 
 type GoldenStatus = GoldenResultI
 
 type GoldenStatusMap = TVar (M.Map TestName GoldenStatus)
 
 interactiveTests :: Ingredient
-interactiveTests = TestManager [Option (Proxy :: Proxy Interactive)] $
+interactiveTests = TestManager [ Option (Proxy :: Proxy Interactive) ] $
   \opts tree ->
-      case lookupOption opts of
-        Interactive False -> Nothing
-        Interactive True -> Just $
-          runTestsInteractive opts tree
+      Just $ runTestsInteractive opts tree
 
 
 runSingleTest ::  IsTest t => GoldenStatusMap -> TestName -> OptionSet -> t -> (Progress -> IO ()) -> IO Result
@@ -139,7 +138,6 @@ runTestsInteractive opts tests = do
       }
 
       return $ \time -> do
---            stats <- computeStatistics smap
             printStatistics stats time
             return $ statFailures stats == 0
 
@@ -148,9 +146,28 @@ runTestsInteractive opts tests = do
   return r
 
 
+printDiff :: TestName -> GDiff -> IO ()
+printDiff n (DiffText _ tGold tAct) = withDiffEnv
+  (\fGold fAct -> do
+        (_, stdOut, _) <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text " ++ fGold ++ " " ++ fAct] T.empty
+        TIO.putStrLn stdOut
+
+  )
+  n tGold tAct
+printDiff _ (ShowDiffed _ t) = TIO.putStrLn t
+printDiff _ Equal = error "Can't print diff for equal values."
 
 showDiff :: TestName -> GDiff -> IO ()
-showDiff n (DiffText _ tGold tAct) = do
+showDiff n (DiffText _ tGold tAct) = withDiffEnv
+  (\fGold fAct -> callProcess "sh"
+        ["-c", "git diff --color=always --no-index --text " ++ fGold ++ " " ++ fAct ++ " | less -r > /dev/tty"])
+  n tGold tAct
+showDiff n (ShowDiffed _ t) = showInLess n t
+showDiff _ Equal = error "Can't show diff for equal values."
+
+-- Stores the golden/actual text in two files, so we can use it for git diff.
+withDiffEnv :: (FilePath -> FilePath -> IO ()) -> TestName -> T.Text -> T.Text -> IO ()
+withDiffEnv cont n tGold tAct = do
   withSystemTempFile (n <.> "golden") (\fGold hGold -> do
     withSystemTempFile (n <.> "actual") (\fAct hAct -> do
       hSetBinaryMode hGold True
@@ -159,13 +176,13 @@ showDiff n (DiffText _ tGold tAct) = do
       BS.hPut hAct (encodeUtf8 tAct)
       hClose hGold
       hClose hAct
-      callProcess "sh"
-        ["-c", "git diff --color=always --no-index --text " ++ fGold ++ " " ++ fAct ++ " | less -r > /dev/tty"]
+      cont fGold fAct
       )
     )
 
-showDiff n (ShowDiffed _ t) = showInLess n t
-showDiff _ Equal = error "Can't show diff for equal values..."
+
+printValue :: TestName -> GShow -> IO ()
+printValue _ (ShowText t) = TIO.putStrLn t
 
 showValue :: TestName -> GShow -> IO ()
 showValue n (ShowText t) = showInLess n t
@@ -186,8 +203,8 @@ tryAccept pref nm upd new = do
   case ans of
     "y" -> do
         upd new
-        printf "%s" pref
         when isTerm hideCursor
+        printf "%s" pref
         return True
     "n" -> do
         printf "%s" pref
@@ -227,6 +244,7 @@ produceOutput opts tree =
   let
     -- Do not retain the reference to the tree more than necessary
     !alignment = computeAlignment opts tree
+    Interactive isInteractive = lookupOption opts
 
     handleSingleTest
       :: (IsTest t, ?colors :: Bool)
@@ -239,16 +257,66 @@ produceOutput opts tree =
         pref = indent level ++ replicate (length name) ' ' ++ "  " ++ align
         printTestName =
           printf "%s%s: %s" (indent level) name align
+        hsep = putStrLn (replicate 40 '=')
+        printResultLine success time forceTime = do
+          -- use an appropriate printing function
+          let
+            printFn =
+              if success
+                then ok
+                else fail
+          if success
+            then printFn "OK"
+            else printFn "FAIL"
+          -- print time only if it's significant
+          when (time >= 0.01 || forceTime) $
+            printFn (printf " (%.2fs)" time)
+          printFn "\n"
 
-        printTestResult (result, resultStatus) = do
+
+        handleTestResult (result, resultStatus) = do
+          -- non-interactive mode. Uses different order of printing,
+          -- as using the interactive layout doesn't go that well
+          -- with printing the diffs to stdout.
+          --
+          printResultLine (resultSuccessful result) (resultTime result) True
+
+          rDesc <- formatMessage $ resultDescription result
+          when (not $ null rDesc) $
+            (if resultSuccessful result then infoOk else infoFail) $
+              printf "%s%s\n" pref (formatDesc (level+1) rDesc)
+
+          stat' <- case resultStatus of
+            RMismatch (GRNoGolden a shw _) -> do
+                infoFail $ printf "%sActual value is:\n" pref
+                let a' = runIdentity a
+                shw' <- shw a'
+                hsep
+                printValue name shw'
+                hsep
+                return ( mempty { statFailures = 1 } )
+            RMismatch (GRDifferent _ _ diff _) -> do
+                infoFail $ printf "%sDiff between actual and golden value:\n" pref
+                hsep
+                printDiff name diff
+                hsep
+                return ( mempty { statFailures = 1 } )
+            RMismatch _ -> error "Impossible case!"
+            RPass -> return ( mempty { statSuccesses = 1 } )
+            RFail -> return ( mempty { statFailures = 1 } )
+
+          return stat'
+
+        handleTestResultInteractive (result, resultStatus) = do
           (result', stat') <- case resultStatus of
-            RInteract (GRNoGolden a shw upd) -> do
+            RMismatch (GRNoGolden a shw upd) -> do
                 printf "Golden value missing. Press <enter> to show actual value.\n"
                 _ <- getLine
                 let a' = runIdentity a
                 shw' <- shw a'
                 showValue name shw'
                 isUpd <- tryAccept pref name upd a'
+
                 return (
                     if isUpd
                     then ( testPassed "Created golden value."
@@ -256,7 +324,7 @@ produceOutput opts tree =
                     else ( testFailed "Golden value missing."
                          , mempty { statFailures = 1 } )
                     )
-            RInteract (GRDifferent _ a diff upd) -> do
+            RMismatch (GRDifferent _ a diff upd) -> do
                 printf "Golden value differs from actual value.\n"
                 showDiff name diff
                 isUpd <- tryAccept pref name upd a
@@ -267,32 +335,21 @@ produceOutput opts tree =
                     else ( testFailed "Golden value does not match actual output."
                          , mempty { statFailures = 1 } )
                     )
-            RInteract _ -> error "Impossible case!"
+            RMismatch _ -> error "Impossible case!"
             RPass -> return (result, mempty { statSuccesses = 1 })
             RFail -> return (result, mempty { statFailures = 1 })
           rDesc <- formatMessage $ resultDescription result'
 
-          -- use an appropriate printing function
-          let
-            printFn =
-              if resultSuccessful result'
-                then ok
-                else fail
-            time = resultTime result
-          if resultSuccessful result'
-            then printFn "OK"
-            else printFn "FAIL"
-          -- print time only if it's significant
-          when (time >= 0.01) $
-            printFn (printf " (%.2fs)" time)
-          printFn "\n"
+          printResultLine (resultSuccessful result') (resultTime result) False
 
           when (not $ null rDesc) $
             (if resultSuccessful result' then infoOk else infoFail) $
-              printf "%s%s\n" (indent $ level + 1) (formatDesc (level+1) rDesc)
+              printf "%s%s\n" pref (formatDesc (level+1) rDesc)
+
           return stat'
 
-      return $ HandleTest name printTestName printTestResult
+      let handleTestResult' = (if isInteractive then handleTestResultInteractive else handleTestResult)
+      return $ HandleTest name printTestName handleTestResult'
 
     handleGroup :: TestName -> Ap (Reader Level) TestOutput -> Ap (Reader Level) TestOutput
     handleGroup name grp = Ap $ do
@@ -528,8 +585,8 @@ getResultWithGolden smap gmap nm ix = do
 
   gr <- atomically $ readTVar gmap
   case nm `M.lookup` gr of
-    Just g@(GRDifferent {}) -> return (r, RInteract g)
-    Just g@(GRNoGolden {})  -> return (r, RInteract g)
+    Just g@(GRDifferent {}) -> return (r, RMismatch g)
+    Just g@(GRNoGolden {})  -> return (r, RMismatch g)
     _ | resultSuccessful r  -> return (r, RPass)
     _ | otherwise           -> return (r, RFail)
   where statusVar =
