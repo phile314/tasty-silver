@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 3.1.2
+-------------
+
+* Add non-interactive mode to test runner, printing diffs/actual values directly to stdout.
+  Useful for (travis) CI.
+
 Version 3.1.1
 -------------
 
