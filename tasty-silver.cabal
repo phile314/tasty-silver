@@ -52,7 +52,7 @@ library
     stm >= 2.4.2,
     tagged,
     tasty >= 0.8,
-    temporary-rc,
+    temporary,
     text >= 0.11.0.0
 
 Test-suite test
@@ -72,5 +72,5 @@ Test-suite test
     , filepath
     , directory
     , process
-    , temporary-rc
+    , temporary
     , transformers >= 0.3
