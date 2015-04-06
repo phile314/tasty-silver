@@ -82,7 +82,12 @@ type GoldenStatus = GoldenResultI
 type GoldenStatusMap = TVar (M.Map TestName GoldenStatus)
 
 interactiveTests :: Ingredient
-interactiveTests = TestManager [ Option (Proxy :: Proxy Interactive) ] $
+interactiveTests = TestManager
+    [ Option (Proxy :: Proxy Interactive)
+    , Option (Proxy :: Proxy HideSuccesses)
+    , Option (Proxy :: Proxy UseColor)
+    , Option (Proxy :: Proxy NumThreads)
+    ] $
   \opts tree ->
       Just $ runTestsInteractive opts tree
 
