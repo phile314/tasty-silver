@@ -6,6 +6,8 @@ Version 3.1.5
 
 * Add experimental --regex-include option to select tests using a regex.
   This option is highly experimental and may change in later versions!
+* The --regex-include/--regex-exclude option may be given multiple times now.
+  The exclusion regexes are applied first, after that all inclusion regexes.
 
 Version 3.1.4
 -------------
