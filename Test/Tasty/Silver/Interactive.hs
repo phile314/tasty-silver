@@ -75,10 +75,13 @@ instance IsOption Interactive where
   optionHelp = return "Run tests in interactive mode."
   optionCLParser = flagCLParser (Just 'i') (Interactive True)
 
+-- we have to store the regex as String, as there is no Typeable instance
+-- for the Regex data type with GHC < 7.8
 data RegexFilter
-  = RFInclude RS.Regex -- include tests that match
-  | RFExclude RS.Regex -- exclude tests that match
+  = RFInclude String -- include tests that match
+  | RFExclude String -- exclude tests that match
   | RFNone
+  deriving (Typeable)
 
 {-instance IsOption RegexFilter where
   defaultValue = RFNone
@@ -86,9 +89,12 @@ data RegexFilter
   optionName = return "regex-include"
   optionHelp = return "Include only tests matching a regex (experimental)."-}
 
+compileRegex :: String -> Maybe RS.Regex
+compileRegex = either (const Nothing) Just . RS.compile R.defaultCompOpt R.defaultExecOpt
+
 instance IsOption RegexFilter where
   defaultValue = RFNone
-  parseValue = fmap RFExclude . either (const Nothing) Just . RS.compile R.defaultCompOpt R.defaultExecOpt
+  parseValue = \x -> fmap (const (RFExclude x)) $ compileRegex x
   optionName = return "regex-exclude"
   optionHelp = return "Exclude tests matching a regex (experimental)."
 
@@ -112,8 +118,8 @@ interactiveTests = TestManager
 filterWithRegex :: OptionSet -> TestTree -> TestTree
 filterWithRegex opts tree = case lookupOption opts of
     RFNone -> tree
-    RFInclude rgx -> filter' (R.matchTest rgx)
-    RFExclude rgx -> filter' (not . R.matchTest rgx)
+    RFInclude rgx -> filter' (R.matchTest $ fromJust $ compileRegex rgx)
+    RFExclude rgx -> filter' (not . R.matchTest (fromJust $ compileRegex rgx))
   where x <//> y = x ++ "/" ++ y
         filter' :: (String -> Bool) -> TestTree
         filter' pred' =
