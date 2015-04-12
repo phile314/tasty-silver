@@ -59,7 +59,8 @@ import Test.Tasty.Providers
 import qualified Data.Map as M
 import System.Console.ANSI
 import qualified System.Process.Text as PTL
-
+import qualified Text.Regex.TDFA.String as RS
+import qualified Text.Regex.TDFA as R
 -- | Like @defaultMain@ from the main tasty package, but also includes the
 -- golden test management capabilities.
 defaultMain :: TestTree -> IO ()
@@ -74,6 +75,22 @@ instance IsOption Interactive where
   optionHelp = return "Run tests in interactive mode."
   optionCLParser = flagCLParser (Just 'i') (Interactive True)
 
+data RegexFilter
+  = RFInclude RS.Regex -- include tests that match
+  | RFExclude RS.Regex -- exclude tests that match
+  | RFNone
+
+{-instance IsOption RegexFilter where
+  defaultValue = RFNone
+  parseValue = fmap RFInclude . either (const Nothing) Just . RS.compile R.defaultCompOpt R.defaultExecOpt
+  optionName = return "regex-include"
+  optionHelp = return "Include only tests matching a regex (experimental)."-}
+
+instance IsOption RegexFilter where
+  defaultValue = RFNone
+  parseValue = fmap RFExclude . either (const Nothing) Just . RS.compile R.defaultCompOpt R.defaultExecOpt
+  optionName = return "regex-exclude"
+  optionHelp = return "Exclude tests matching a regex (experimental)."
 
 data ResultStatus = RPass | RFail | RMismatch GoldenResultI
 
@@ -87,9 +104,29 @@ interactiveTests = TestManager
     , Option (Proxy :: Proxy HideSuccesses)
     , Option (Proxy :: Proxy UseColor)
     , Option (Proxy :: Proxy NumThreads)
+    , Option (Proxy :: Proxy RegexFilter)
     ] $
   \opts tree ->
-      Just $ runTestsInteractive opts tree
+      Just $ runTestsInteractive opts (filterWithRegex opts tree)
+
+filterWithRegex :: OptionSet -> TestTree -> TestTree
+filterWithRegex opts tree = case lookupOption opts of
+    RFNone -> tree
+    RFInclude rgx -> filter' (R.matchTest rgx)
+    RFExclude rgx -> filter' (not . R.matchTest rgx)
+  where x <//> y = x ++ "/" ++ y
+        filter' :: (String -> Bool) -> TestTree
+        filter' pred' =
+            let alg :: TreeFold [String -> Maybe TestTree]
+                alg = trivialFold
+                    { foldSingle = \_ nm t -> [\pth -> if pred' (pth <//> nm) then Just (SingleTest nm t) else Nothing]
+                    , foldGroup  = \nm chlds -> [\pth -> let pth' = pth <//> nm
+                                        in if pred' pth'
+                                            then Just $ TestGroup nm (catMaybes $ map (\x -> x (pth <//> nm)) chlds)
+                                            else Nothing]
+                    }
+                [root] = foldTestTree alg opts tree
+             in maybe (testGroup "" []) (id) (root "")
 
 
 runSingleTest ::  IsTest t => GoldenStatusMap -> TestName -> OptionSet -> t -> (Progress -> IO ()) -> IO Result

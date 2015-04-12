@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 3.1.4
+-------------
+
+* Add experimental --regex-exclude option to filter out tests using a regex.
+  This option is highly experimental and may change in later versions!
+
 Version 3.1.3
 -------------
 

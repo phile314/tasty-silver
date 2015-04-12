@@ -1,7 +1,7 @@
-import Test.Tasty
+import Test.Tasty hiding (defaultMain)
 import Test.Tasty.HUnit
 import Test.Tasty.Silver
-import Test.Tasty.Silver.Interactive hiding (defaultMain)
+import Test.Tasty.Silver.Interactive
 import Test.Tasty.Runners
 import Test.Tasty.Silver.Advanced
 import Test.Tasty.Silver.Internal

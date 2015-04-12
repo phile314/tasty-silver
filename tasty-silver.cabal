@@ -49,6 +49,7 @@ library
     optparse-applicative,
     process >= 1.2,
     process-extras >= 0.2,
+    regex-tdfa >= 1.2.0,
     stm >= 2.4.2,
     tagged,
     tasty >= 0.8,
