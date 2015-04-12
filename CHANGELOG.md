@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 3.1.5
+-------------
+
+* Add experimental --regex-include option to select tests using a regex.
+  This option is highly experimental and may change in later versions!
+
 Version 3.1.4
 -------------
 

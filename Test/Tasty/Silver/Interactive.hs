@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
 -- | Golden test management, interactive mode. Runs the tests, and asks
 -- the user how to proceed in case of failure or missing golden standard.
@@ -80,23 +81,42 @@ instance IsOption Interactive where
 data RegexFilter
   = RFInclude String -- include tests that match
   | RFExclude String -- exclude tests that match
-  | RFNone
   deriving (Typeable)
 
-{-instance IsOption RegexFilter where
-  defaultValue = RFNone
-  parseValue = fmap RFInclude . either (const Nothing) Just . RS.compile R.defaultCompOpt R.defaultExecOpt
-  optionName = return "regex-include"
-  optionHelp = return "Include only tests matching a regex (experimental)."-}
+newtype ExcludeFilters = ExcludeFilters [RegexFilter]
+  deriving (Typeable)
+
+newtype IncludeFilters = IncludeFilters [RegexFilter]
+  deriving (Typeable)
 
 compileRegex :: String -> Maybe RS.Regex
 compileRegex = either (const Nothing) Just . RS.compile R.defaultCompOpt R.defaultExecOpt
 
-instance IsOption RegexFilter where
-  defaultValue = RFNone
-  parseValue = \x -> fmap (const (RFExclude x)) $ compileRegex x
+parseFilter :: forall v . IsOption v => (String -> RegexFilter) -> ([RegexFilter] -> v) -> Parser v
+parseFilter mkRF mkV = mkV <$> many ( option parse ( long name <> help helpString))
+  where
+    name = untag (optionName :: Tagged v String)
+    helpString = untag (optionHelp :: Tagged v String)
+    parse = (str >>=
+        either (\err -> readerError $ "Could not parse " ++ name ++ ": " ++ err) (\_ -> mkRF <$> str)
+        <$> RS.compile R.defaultCompOpt R.defaultExecOpt)
+
+parseValue1 :: (String -> RegexFilter) -> String -> Maybe [RegexFilter]
+parseValue1 f x = fmap (const $ [f x]) $ compileRegex x
+
+instance IsOption ExcludeFilters where
+  defaultValue = ExcludeFilters []
+  parseValue = fmap ExcludeFilters . parseValue1 RFExclude
   optionName = return "regex-exclude"
   optionHelp = return "Exclude tests matching a regex (experimental)."
+  optionCLParser = parseFilter RFExclude ExcludeFilters
+
+instance IsOption IncludeFilters where
+  defaultValue = IncludeFilters []
+  parseValue = fmap IncludeFilters . parseValue1 RFInclude
+  optionName = return "regex-include"
+  optionHelp = return "Include only tests matching a regex (experimental)."
+  optionCLParser = parseFilter RFInclude IncludeFilters
 
 data ResultStatus = RPass | RFail | RMismatch GoldenResultI
 
@@ -110,15 +130,21 @@ interactiveTests = TestManager
     , Option (Proxy :: Proxy HideSuccesses)
     , Option (Proxy :: Proxy UseColor)
     , Option (Proxy :: Proxy NumThreads)
-    , Option (Proxy :: Proxy RegexFilter)
+    , Option (Proxy :: Proxy ExcludeFilters)
+    , Option (Proxy :: Proxy IncludeFilters)
     ] $
   \opts tree ->
       Just $ runTestsInteractive opts (filterWithRegex opts tree)
 
 filterWithRegex :: OptionSet -> TestTree -> TestTree
-filterWithRegex opts tree = case lookupOption opts of
-    RFNone -> tree
-    RFInclude rgx -> filter' (R.matchTest $ fromJust $ compileRegex rgx)
+filterWithRegex opts tree = foldl (filterWithRegex1 opts) tree (excRgxs ++ incRgxs)
+  where ExcludeFilters excRgxs = lookupOption opts
+        IncludeFilters incRgxs = lookupOption opts
+
+
+filterWithRegex1 :: OptionSet -> TestTree -> RegexFilter -> TestTree
+filterWithRegex1 opts tree rf = case rf of
+    RFInclude rgx -> filter' (R.matchTest (fromJust $ compileRegex rgx))
     RFExclude rgx -> filter' (not . R.matchTest (fromJust $ compileRegex rgx))
   where x <//> y = x ++ "/" ++ y
         filter' :: (String -> Bool) -> TestTree
@@ -126,10 +152,7 @@ filterWithRegex opts tree = case lookupOption opts of
             let alg :: TreeFold [String -> Maybe TestTree]
                 alg = trivialFold
                     { foldSingle = \_ nm t -> [\pth -> if pred' (pth <//> nm) then Just (SingleTest nm t) else Nothing]
-                    , foldGroup  = \nm chlds -> [\pth -> let pth' = pth <//> nm
-                                        in if pred' pth'
-                                            then Just $ TestGroup nm (catMaybes $ map (\x -> x (pth <//> nm)) chlds)
-                                            else Nothing]
+                    , foldGroup  = \nm chlds -> [\pth -> Just $ TestGroup nm (catMaybes $ map (\x -> x (pth <//> nm)) chlds)]
                     }
                 [root] = foldTestTree alg opts tree
              in maybe (testGroup "" []) (id) (root "")
