@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.6
+-------------
+
+* Expose regex filter modules.
+
 Version 3.1.5
 -------------
 
