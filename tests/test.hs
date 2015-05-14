@@ -6,6 +6,7 @@ import Test.Tasty.Runners
 import Test.Tasty.Silver.Advanced
 import Test.Tasty.Silver.Internal
 import Test.Tasty.Options
+import Test.Tasty.Silver.Filter
 
 import Data.Monoid
 import System.IO.Temp
@@ -17,7 +18,7 @@ import Control.Monad.IO.Class
 
 touch f = writeFile f ""
 
-main = defaultMain $ testGroup "tests" [testFindByExt, testWithResource]
+main = defaultMain $ testGroup "tests" [testFindByExt, testWithResource, testCheckRF]
 
 
 
@@ -58,3 +59,11 @@ testWithResource = testCase "withResource" $ do
         success <- r'
         assertBool "Test should succeed." success
       Nothing -> assertFailure "Test broken"
+
+testCheckRF :: TestTree
+testCheckRF = testGroup "Filter.checkRF"
+    [ testCase "empty1" $ checkRF True [] "/" @?= True
+    , testCase "empty1" $ checkRF False [] "/" @?= False
+    , testCase "empty2" $ checkRF True [] "/sdfg" @?= True
+    , testCase "empty2" $ checkRF False [] "/sdfg" @?= False
+    ]

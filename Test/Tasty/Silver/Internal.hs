@@ -117,3 +117,8 @@ forceGoldenResult gr = case gr of
                 return $ GRNoGolden (Identity act') shw upd
             (GRDifferent a b c d) -> return $ GRDifferent a b c d
             (GREqual) -> return GREqual
+
+instance forall m . Show (GoldenResult' m) where
+  show GREqual = "GREqual"
+  show (GRDifferent {}) = "GRDifferent"
+  show (GRNoGolden {}) = "GRNoGolden"

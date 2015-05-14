@@ -1,6 +1,13 @@
 Changes
 =======
 
+Version 3.1.7
+-------------
+
+* Add feature to disable certain tests, still showing them in the UI
+  but not running them.
+* Fix a concurrency issue in the interactive test runner.
+
 Version 3.1.6
 -------------
 

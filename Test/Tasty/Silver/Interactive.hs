@@ -11,6 +11,7 @@ module Test.Tasty.Silver.Interactive
   (
   -- * Command line helpers
     defaultMain
+  , defaultMain1
 
   -- * The ingredient
   , interactiveTests
@@ -50,7 +51,7 @@ import Control.Exception
 import Text.Printf
 import qualified Data.Text as T
 import Data.Text.Encoding
-import Options.Applicative
+import Options.Applicative hiding (Failure, Success)
 import System.Process.ByteString as PS
 import System.Process
 import qualified Data.ByteString as BS
@@ -58,15 +59,22 @@ import System.IO
 import System.IO.Temp
 import System.FilePath
 import Test.Tasty.Providers
-import qualified Data.Map as M
 import System.Console.ANSI
 import qualified System.Process.Text as PTL
 
+type DisabledTests = TestPath -> Bool
 
 -- | Like @defaultMain@ from the main tasty package, but also includes the
 -- golden test management capabilities.
 defaultMain :: TestTree -> IO ()
-defaultMain = defaultMainWithIngredients [listingTests, interactiveTests]
+defaultMain = defaultMain1 []
+
+
+defaultMain1 :: ([RegexFilter]) -> TestTree -> IO ()
+defaultMain1 filters = defaultMainWithIngredients
+        [ listingTests
+        , interactiveTests (checkRF False filters)
+        ]
 
 newtype Interactive = Interactive Bool
   deriving (Eq, Ord, Typeable)
@@ -77,15 +85,28 @@ instance IsOption Interactive where
   optionHelp = return "Run tests in interactive mode."
   optionCLParser = flagCLParser (Just 'i') (Interactive True)
 
+data ResultType = RTSuccess | RTFail | RTIgnore
+  deriving (Eq)
 
-data ResultStatus = RPass | RFail | RMismatch GoldenResultI
+data FancyTestException
+  = Mismatch GoldenResultI
+  | Disabled
+  deriving (Show, Typeable)
 
-type GoldenStatus = GoldenResultI
+instance Exception FancyTestException
 
-type GoldenStatusMap = TVar (M.Map TestName GoldenStatus)
+getResultType :: Result -> ResultType
+getResultType (Result { resultOutcome = Success}) = RTSuccess
+getResultType (Result { resultOutcome = (Failure (TestThrewException e))}) =
+  case fromException e of
+    Just Disabled -> RTIgnore
+    _ -> RTFail
+getResultType (Result { resultOutcome = (Failure _)}) = RTFail
 
-interactiveTests :: Ingredient
-interactiveTests = TestManager
+
+interactiveTests :: DisabledTests
+    -> Ingredient
+interactiveTests dis = TestManager
     [ Option (Proxy :: Proxy Interactive)
     , Option (Proxy :: Proxy HideSuccesses)
     , Option (Proxy :: Proxy UseColor)
@@ -94,29 +115,30 @@ interactiveTests = TestManager
     , Option (Proxy :: Proxy IncludeFilters)
     ] $
   \opts tree ->
-      Just $ runTestsInteractive opts (filterWithRegex opts tree)
+      Just $ runTestsInteractive dis opts (filterWithRegex opts tree)
 
-runSingleTest ::  IsTest t => GoldenStatusMap -> TestName -> OptionSet -> t -> (Progress -> IO ()) -> IO Result
-runSingleTest gs n opts t cb = do
+runSingleTest ::  IsTest t => DisabledTests -> TestPath -> TestName -> OptionSet -> t -> (Progress -> IO ()) -> IO Result
+runSingleTest dis tp _ _ _ _ | dis tp = 
+  return $ (testFailed "")
+    { resultOutcome = (Failure $ TestThrewException $ toException Disabled) }
+runSingleTest _ _ _ opts t cb = do
   case (cast t :: Maybe Golden) of
     Nothing -> run opts t cb
     Just g -> do
-
         (r, gr) <- runGolden g
 
         -- we may be in a different thread here than the main ui.
         -- force evaluation of actual value here, as we have to evaluate it before
         -- leaving this test.
         gr' <- forceGoldenResult gr
-        atomically $ modifyTVar gs (M.insert n gr')
-        return r
-
+        case gr' of
+            GREqual -> return r
+            grd -> return $ r { resultOutcome = (Failure $ TestThrewException $ toException $ Mismatch grd) }
 
 -- | A simple console UI
-runTestsInteractive :: OptionSet -> TestTree -> IO Bool
-runTestsInteractive opts tests = do
-  gmap <- newTVarIO M.empty
-  let tests' = wrapRunTest (runSingleTest gmap) tests
+runTestsInteractive :: DisabledTests -> OptionSet -> TestTree -> IO Bool
+runTestsInteractive dis opts tests = do
+  let tests' = wrapRunTest (runSingleTest dis) tests
 
   r <- launchTestTree opts tests' $ \smap ->
     do
@@ -140,10 +162,10 @@ runTestsInteractive opts tests = do
 
       stats <- case () of { _
         | hideSuccesses && isTerm ->
-            consoleOutputHidingSuccesses outp smap gmap
+            consoleOutputHidingSuccesses outp smap
         | hideSuccesses && not isTerm ->
-            streamOutputHidingSuccesses outp smap gmap
-        | otherwise -> consoleOutput outp smap gmap
+            streamOutputHidingSuccesses outp smap
+        | otherwise -> consoleOutput outp smap
       }
 
       return $ \time -> do
@@ -235,7 +257,7 @@ data TestOutput
   = HandleTest
       {- test name, used for golden lookup #-} (TestName)
       {- print test name   -} (IO ())
-      {- print test result -} ((Result, ResultStatus) -> IO Statistics)
+      {- print test result -} (Result -> IO Statistics)
   | PrintHeading (IO ()) TestOutput
   | Skip
   | Seq TestOutput TestOutput
@@ -267,92 +289,110 @@ produceOutput opts tree =
         printTestName =
           printf "%s%s: %s" (indent level) name align
         hsep = putStrLn (replicate 40 '=')
-        printResultLine success time forceTime = do
+        printResultLine result forceTime = do
           -- use an appropriate printing function
           let
-            printFn =
-              if success
-                then ok
-                else fail
-          if success
-            then printFn "OK"
-            else printFn "FAIL"
+            resTy = getResultType result
+            printFn = case resTy of
+                RTSuccess -> ok
+                RTIgnore -> warn
+                RTFail -> fail
+          case resTy of
+            RTSuccess -> printFn "OK"
+            RTIgnore -> printFn "DISABLED"
+            RTFail -> printFn "FAIL"
           -- print time only if it's significant
-          when (time >= 0.01 || forceTime) $
-            printFn (printf " (%.2fs)" time)
+          when (resultTime result >= 0.01 || forceTime) $
+            printFn (printf " (%.2fs)" $ resultTime result)
           printFn "\n"
 
 
-        handleTestResult (result, resultStatus) = do
+        handleTestResult result = do
           -- non-interactive mode. Uses different order of printing,
           -- as using the interactive layout doesn't go that well
           -- with printing the diffs to stdout.
           --
-          printResultLine (resultSuccessful result) (resultTime result) True
+          printResultLine result True
 
           rDesc <- formatMessage $ resultDescription result
-          when (not $ null rDesc) $
-            (if resultSuccessful result then infoOk else infoFail) $
+          when (not $ null rDesc) $ (case getResultType result of
+            RTSuccess -> infoOk
+            RTIgnore -> infoWarn
+            RTFail -> infoFail) $
               printf "%s%s\n" pref (formatDesc (level+1) rDesc)
 
-          stat' <- case resultStatus of
-            RMismatch (GRNoGolden a shw _) -> do
-                infoFail $ printf "%sActual value is:\n" pref
-                let a' = runIdentity a
-                shw' <- shw a'
-                hsep
-                printValue name shw'
-                hsep
-                return ( mempty { statFailures = 1 } )
-            RMismatch (GRDifferent _ _ diff _) -> do
-                infoFail $ printf "%sDiff between actual and golden value:\n" pref
-                hsep
-                printDiff name diff
-                hsep
-                return ( mempty { statFailures = 1 } )
-            RMismatch _ -> error "Impossible case!"
-            RPass -> return ( mempty { statSuccesses = 1 } )
-            RFail -> return ( mempty { statFailures = 1 } )
+          stat' <- case resultOutcome result of
+            Failure (TestThrewException e) ->
+              case fromException e of
+                Just (Mismatch (GRNoGolden a shw _)) -> do
+                  infoFail $ printf "%sActual value is:\n" pref
+                  let a' = runIdentity a
+                  shw' <- shw a'
+                  hsep
+                  printValue name shw'
+                  hsep
+                  return ( mempty { statFailures = 1 } )
+                Just (Mismatch (GRDifferent _ _ diff _)) -> do
+                  infoFail $ printf "%sDiff between actual and golden value:\n" pref
+                  hsep
+                  printDiff name diff
+                  hsep
+                  return ( mempty { statFailures = 1 } )
+                Just (Mismatch _) -> error "Impossible case!"
+                Just Disabled -> return ( mempty { statDisabled = 1 } )
+                Nothing -> return ( mempty { statFailures = 1 } )
+            Failure _ -> return ( mempty { statFailures = 1 } )
+            Success -> return ( mempty { statSuccesses = 1 } )
 
           return stat'
 
-        handleTestResultInteractive (result, resultStatus) = do
-          (result', stat') <- case resultStatus of
-            RMismatch (GRNoGolden a shw upd) -> do
-                printf "Golden value missing. Press <enter> to show actual value.\n"
-                _ <- getLine
-                let a' = runIdentity a
-                shw' <- shw a'
-                showValue name shw'
-                isUpd <- tryAccept pref name upd a'
+        handleTestResultInteractive result = do
+          (result', stat') <- case (resultOutcome result) of
+            Failure (TestThrewException e) ->
+              case fromException e of
+                Just (Mismatch (GRNoGolden a shw upd)) -> do
+                  printf "Golden value missing. Press <enter> to show actual value.\n"
+                  _ <- getLine
+                  let a' = runIdentity a
+                  shw' <- shw a'
+                  showValue name shw'
+                  isUpd <- tryAccept pref name upd a'
 
-                return (
-                    if isUpd
-                    then ( testPassed "Created golden value."
-                         , mempty { statCreatedGolden = 1 } )
-                    else ( testFailed "Golden value missing."
-                         , mempty { statFailures = 1 } )
-                    )
-            RMismatch (GRDifferent _ a diff upd) -> do
-                printf "Golden value differs from actual value.\n"
-                showDiff name diff
-                isUpd <- tryAccept pref name upd a
-                return (
-                    if isUpd
-                    then ( testPassed "Updated golden value."
-                         , mempty { statUpdatedGolden = 1 } )
-                    else ( testFailed "Golden value does not match actual output."
-                         , mempty { statFailures = 1 } )
-                    )
-            RMismatch _ -> error "Impossible case!"
-            RPass -> return (result, mempty { statSuccesses = 1 })
-            RFail -> return (result, mempty { statFailures = 1 })
-          rDesc <- formatMessage $ resultDescription result'
+                  return (
+                      if isUpd
+                      then ( testPassed "Created golden value."
+                           , mempty { statCreatedGolden = 1 } )
+                      else ( testFailed "Golden value missing."
+                           , mempty { statFailures = 1 } )
+                      )
+                Just (Mismatch (GRDifferent _ a diff upd)) -> do
+                  printf "Golden value differs from actual value.\n"
+                  showDiff name diff
+                  isUpd <- tryAccept pref name upd a
+                  return (
+                      if isUpd
+                      then ( testPassed "Updated golden value."
+                           , mempty { statUpdatedGolden = 1 } )
+                      else ( testFailed "Golden value does not match actual output."
+                           , mempty { statFailures = 1 } )
+                      )
+                Just (Mismatch _) -> error "Impossible case!"
+                Just Disabled -> return
+                            ( result
+                            , mempty { statDisabled = 1 } )
+                Nothing -> return (result, mempty {statFailures = 1})
+            Success -> return (result, mempty { statSuccesses = 1 })
+            Failure _ -> return (result, mempty { statFailures = 1 })
 
-          printResultLine (resultSuccessful result') (resultTime result) False
+          let result'' = result' { resultTime = resultTime result }
 
-          when (not $ null rDesc) $
-            (if resultSuccessful result' then infoOk else infoFail) $
+          printResultLine result'' False
+
+          rDesc <- formatMessage $ resultDescription result''
+          when (not $ null rDesc) $ (case getResultType result'' of
+            RTSuccess -> infoOk
+            RTIgnore -> infoWarn
+            RTFail -> infoFail) $
               printf "%s%s\n" pref (formatDesc (level+1) rDesc)
 
           return stat'
@@ -379,18 +419,21 @@ produceOutput opts tree =
 
 foldTestOutput
   :: (?colors :: Bool, Monoid b)
-  => (IO () -> IO (Result, ResultStatus)
-    -> ((Result, ResultStatus) -> IO Statistics)
+  => (IO () -> IO Result
+    -> (Result -> IO Statistics)
     -> b)
   -> (IO () -> b -> b)
-  -> TestOutput -> StatusMap -> GoldenStatusMap -> b
-foldTestOutput foldTest foldHeading outputTree smap gmap =
+  -> TestOutput -> StatusMap -> b
+foldTestOutput foldTest foldHeading outputTree smap =
   flip evalState 0 $ getApp $ go outputTree where
-  go (HandleTest nm printName handleResult) = Ap $ do
+  go (HandleTest _ printName handleResult) = Ap $ do
     ix <- get
     put $! ix + 1
     let
-      readStatusVar = getResultWithGolden smap gmap nm ix
+      statusVar =
+        fromMaybe (error "internal error: index out of bounds") $
+        IntMap.lookup ix smap
+      readStatusVar = getResultFromTVar statusVar
     return $ foldTest printName readStatusVar handleResult
   go (PrintHeading printName printBody) = Ap $
     foldHeading printName <$> getApp (go printBody)
@@ -403,9 +446,9 @@ foldTestOutput foldTest foldHeading outputTree smap gmap =
 -- TestOutput modes
 --------------------------------------------------
 -- {{{
-consoleOutput :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO Statistics
-consoleOutput outp smap gmap =
-  getApp . fst $ foldTestOutput foldTest foldHeading outp smap gmap
+consoleOutput :: (?colors :: Bool) => TestOutput -> StatusMap -> IO Statistics
+consoleOutput outp smap =
+  getApp . fst $ foldTestOutput foldTest foldHeading outp smap
   where
     foldTest printName getResult handleResult =
       (Ap $ do
@@ -420,15 +463,15 @@ consoleOutput outp smap gmap =
         return stats
       , Any nonempty )
 
-consoleOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO Statistics
-consoleOutputHidingSuccesses outp smap gmap =
-  snd <$> (getApp $ foldTestOutput foldTest foldHeading outp smap gmap)
+consoleOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> IO Statistics
+consoleOutputHidingSuccesses outp smap =
+  snd <$> (getApp $ foldTestOutput foldTest foldHeading outp smap)
   where
     foldTest printName getResult handleResult =
       Ap $ do
           _ <- printName
           r <- getResult
-          if resultSuccessful (fst r)
+          if resultSuccessful r
             then do
                 clearThisLine
                 return (Any False, mempty { statSuccesses = 1 })
@@ -446,15 +489,15 @@ consoleOutputHidingSuccesses outp smap gmap =
     clearAboveLine = do cursorUpLine 1; clearThisLine
     clearThisLine = do clearLine; setCursorColumn 0
 
-streamOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> GoldenStatusMap -> IO Statistics
-streamOutputHidingSuccesses outp smap gmap =
+streamOutputHidingSuccesses :: (?colors :: Bool) => TestOutput -> StatusMap -> IO Statistics
+streamOutputHidingSuccesses outp smap =
   snd <$> (flip evalStateT [] . getApp $
-    foldTestOutput foldTest foldHeading outp smap gmap)
+    foldTestOutput foldTest foldHeading outp smap)
   where
     foldTest printName getResult handleResult =
       Ap $ do
           r <- liftIO $ getResult
-          if resultSuccessful (fst r)
+          if resultSuccessful r
             then return (Any False, mempty { statSuccesses = 1 })
             else do
               stack <- get
@@ -490,11 +533,12 @@ data Statistics = Statistics
   , statUpdatedGolden :: !Int
   , statCreatedGolden :: !Int
   , statFailures :: !Int
+  , statDisabled :: !Int
   }
 
 instance Monoid Statistics where
-  Statistics s1 ug1 cg1 f1 `mappend` Statistics s2 ug2 cg2 f2 = Statistics (s1 + s2) (ug1 + ug2) (cg1 + cg2) (f1 + f2)
-  mempty = Statistics 0 0 0 0
+  Statistics a1 b1 c1 d1 e1 `mappend` Statistics a2 b2 c2 d2 e2 = Statistics (a1 + a2) (b1 + b2) (c1 + c2) (d1 + d2) (e1 + e2)
+  mempty = Statistics 0 0 0 0 0
 
 printStatistics :: (?colors :: Bool) => Statistics -> Time -> IO ()
 printStatistics st time = do
@@ -504,6 +548,7 @@ printStatistics st time = do
 
   when (statCreatedGolden st > 0) (printf "Created %d golden values.\n" (statCreatedGolden st))
   when (statUpdatedGolden st > 0) (printf "Updated %d golden values.\n" (statUpdatedGolden st))
+  when (statDisabled st > 0) (printf "Ignored %d disabled tests.\n" (statDisabled st))
 
   case statFailures st of
     0 -> do
@@ -588,7 +633,7 @@ parseUseColor s =
 --------------------------------------------------
 -- {{{
 
-getResultWithGolden :: StatusMap -> GoldenStatusMap -> TestName -> Int -> IO (Result, ResultStatus)
+{-getResultWithGolden :: StatusMap -> GoldenStatusMap -> TestName -> Int -> IO (Result, ResultStatus)
 getResultWithGolden smap gmap nm ix = do
   r <- getResultFromTVar statusVar
 
@@ -597,10 +642,12 @@ getResultWithGolden smap gmap nm ix = do
     Just g@(GRDifferent {}) -> return (r, RMismatch g)
     Just g@(GRNoGolden {})  -> return (r, RMismatch g)
     _ | resultSuccessful r  -> return (r, RPass)
+    _ | resultOutcome r
     _ | otherwise           -> return (r, RFail)
   where statusVar =
             fromMaybe (error "internal error: index out of bounds") $
             IntMap.lookup ix smap
+-}
 
 getResultFromTVar :: TVar Status -> IO Result
 getResultFromTVar statusVar = do
@@ -609,6 +656,8 @@ getResultFromTVar statusVar = do
     case status of
       Done r -> return r
       _ -> retry
+
+
 
 -- }}}
 
@@ -674,10 +723,12 @@ computeAlignment opts =
         Maximum x -> x
 
 -- (Potentially) colorful output
-ok, fail, infoOk, infoFail :: (?colors :: Bool) => String -> IO ()
-fail     = output BoldIntensity   Vivid Red
+ok, warn, fail, infoOk, infoWarn, infoFail :: (?colors :: Bool) => String -> IO ()
 ok       = output NormalIntensity Dull  Green
+warn     = output NormalIntensity Dull  Yellow
+fail     = output BoldIntensity   Vivid Red
 infoOk   = output NormalIntensity Dull  White
+infoWarn = output NormalIntensity Dull  White
 infoFail = output NormalIntensity Dull  Red
 
 output
