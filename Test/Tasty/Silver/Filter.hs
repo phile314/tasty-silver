@@ -83,17 +83,23 @@ filterWithRegex opts tree = foldl (filterWithRegex1 opts) tree (excRgxs ++ incRg
 
 
 filterWithRegex1 :: OptionSet -> TestTree -> RegexFilter -> TestTree
-filterWithRegex1 opts tree rf = case rf of
-    RFInclude rgx -> filter' (R.matchTest (fromJust $ compileRegex rgx))
-    RFExclude rgx -> filter' (not . R.matchTest (fromJust $ compileRegex rgx))
+filterWithRegex1 _ tree rf = fromMaybe emptyTest (filter' "/" tree)
   where x <//> y = x ++ "/" ++ y
-        filter' :: (String -> Bool) -> TestTree
-        filter' pred' =
-            let alg :: TreeFold [String -> Maybe TestTree]
-                alg = trivialFold
-                    { foldSingle = \_ nm t -> [\pth -> if pred' (pth <//> nm) then Just (SingleTest nm t) else Nothing]
-                    , foldGroup  = \nm chlds -> [\pth -> Just $ TestGroup nm (catMaybes $ map (\x -> x (pth <//> nm)) chlds)]
-                    }
-                [root] = foldTestTree alg opts tree
-             in maybe (testGroup "" []) (id) (root "")
+
+        prd = case rf of
+            RFInclude rgx -> R.matchTest (fromJust $ compileRegex rgx)
+            RFExclude rgx -> not . R.matchTest (fromJust $ compileRegex rgx)
+
+        filter' :: String -> TestTree -> Maybe TestTree
+        filter' pth (SingleTest n t) = if prd (pth <//> n) then Just $ SingleTest n t else Nothing
+        filter' pth (TestGroup n ts) = if prd pth' then Just $ TestGroup n (catMaybes $ map (filter' pth') ts) else Nothing
+          where pth' = pth <//> n
+        filter' pth (PlusTestOptions o t) = PlusTestOptions o <$> filter' pth t
+        -- we don't know at tree construction time what the tree wrapped inside an AskOptions/WithResource
+        -- is going to look like. We always return something, and just return an empty test group
+        -- if later on we see that the child subtree was excluded.
+        filter' pth (WithResource r t) = Just $ WithResource r (\x -> fromMaybe emptyTest (filter' pth (t x)))
+        filter' pth (AskOptions t) = Just $ AskOptions (\o -> fromMaybe emptyTest (filter' pth (t o)))
+
+        emptyTest = testGroup "" []
 
