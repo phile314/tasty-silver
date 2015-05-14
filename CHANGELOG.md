@@ -5,6 +5,7 @@ Version 3.1.6
 -------------
 
 * Expose regex filter modules.
+* Fix issue with regex filters when used together with withResource nodes.
 
 Version 3.1.5
 -------------
