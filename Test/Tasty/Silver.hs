@@ -119,13 +119,7 @@ goldenVsAction name ref act toTxt =
     (toTxt <$> act)
     textLikeDiff
     textLikeShow
-    (upd . fromStrict . encodeUtf8)
-  where upd = BL.writeFile ref
-#if __GLASGOW_HASKELL__ < 706
-        fromStrict x = BL.fromChunks [x]
-#else
-        fromStrict = BL.fromStrict
-#endif
+    (BS.writeFile ref . encodeUtf8)
 
 textLikeShow :: T.Text -> GShow
 textLikeShow = ShowText
