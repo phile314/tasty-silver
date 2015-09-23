@@ -82,7 +82,7 @@ goldenVsFile
 goldenVsFile name ref new act =
   goldenTest1
     name
-    (maybe Nothing (Just . decodeUtf8) <$> readFileMaybe ref)
+    (fmap decodeUtf8 <$> readFileMaybe ref)
     (act >> (decodeUtf8 <$> BS.readFile new))
     textLikeDiff
     textLikeShow
@@ -115,7 +115,7 @@ goldenVsAction
 goldenVsAction name ref act toTxt =
   goldenTest1
     name
-    (maybe Nothing (Just . decodeUtf8) <$> readFileMaybe ref)
+    (fmap decodeUtf8 <$> readFileMaybe ref)
     (toTxt <$> act)
     textLikeDiff
     textLikeShow
