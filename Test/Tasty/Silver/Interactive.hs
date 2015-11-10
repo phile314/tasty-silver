@@ -288,7 +288,6 @@ produceOutput opts tree =
         pref = indent level ++ replicate (length name) ' ' ++ "  " ++ align
         printTestName =
           printf "%s%s: %s" (indent level) name align
-        hsep = putStrLn (replicate 40 '=')
         printResultLine result forceTime = do
           -- use an appropriate printing function
           let
@@ -321,28 +320,7 @@ produceOutput opts tree =
             RTFail -> infoFail) $
               printf "%s%s\n" pref (formatDesc (level+1) rDesc)
 
-          stat' <- case resultOutcome result of
-            Failure (TestThrewException e) ->
-              case fromException e of
-                Just (Mismatch (GRNoGolden a shw _)) -> do
-                  infoFail $ printf "%sActual value is:\n" pref
-                  let a' = runIdentity a
-                  shw' <- shw a'
-                  hsep
-                  printValue name shw'
-                  hsep
-                  return ( mempty { statFailures = 1 } )
-                Just (Mismatch (GRDifferent _ _ diff _)) -> do
-                  infoFail $ printf "%sDiff between actual and golden value:\n" pref
-                  hsep
-                  printDiff name diff
-                  hsep
-                  return ( mempty { statFailures = 1 } )
-                Just (Mismatch _) -> error "Impossible case!"
-                Just Disabled -> return ( mempty { statDisabled = 1 } )
-                Nothing -> return ( mempty { statFailures = 1 } )
-            Failure _ -> return ( mempty { statFailures = 1 } )
-            Success -> return ( mempty { statSuccesses = 1 } )
+          stat' <- printTestOutput pref name result
 
           return stat'
 
@@ -350,43 +328,53 @@ produceOutput opts tree =
           (result', stat') <- case (resultOutcome result) of
             Failure (TestThrewException e) ->
               case fromException e of
-                Just (Mismatch (GRNoGolden a shw upd)) -> do
+                Just (Mismatch (GRDifferent _ a diff Nothing)) -> do
+                  printResultLine result False
+                  s <- printTestOutput pref name result
+                  return (testFailed "", s)
+                Just (Mismatch (GRNoGolden a shw (Just upd))) -> do
                   printf "Golden value missing. Press <enter> to show actual value.\n"
                   _ <- getLine
                   let a' = runIdentity a
                   shw' <- shw a'
                   showValue name shw'
                   isUpd <- tryAccept pref name upd a'
-
-                  return (
-                      if isUpd
-                      then ( testPassed "Created golden value."
-                           , mempty { statCreatedGolden = 1 } )
-                      else ( testFailed "Golden value missing."
-                           , mempty { statFailures = 1 } )
-                      )
-                Just (Mismatch (GRDifferent _ a diff upd)) -> do
+                  let r =
+                        if isUpd
+                        then ( testPassed "Created golden value."
+                             , mempty { statCreatedGolden = 1 } )
+                        else ( testFailed "Golden value missing."
+                             , mempty { statFailures = 1 } )
+                  printResultLine (fst r) False
+                  return r
+                Just (Mismatch (GRDifferent _ a diff (Just upd))) -> do
                   printf "Golden value differs from actual value.\n"
                   showDiff name diff
                   isUpd <- tryAccept pref name upd a
-                  return (
-                      if isUpd
-                      then ( testPassed "Updated golden value."
-                           , mempty { statUpdatedGolden = 1 } )
-                      else ( testFailed "Golden value does not match actual output."
-                           , mempty { statFailures = 1 } )
-                      )
+                  let r =
+                        if isUpd
+                        then ( testPassed "Updated golden value."
+                             , mempty { statUpdatedGolden = 1 } )
+                        else ( testFailed "Golden value does not match actual output."
+                             , mempty { statFailures = 1 } )
+                  printResultLine (fst r) False
+                  return r
                 Just (Mismatch _) -> error "Impossible case!"
-                Just Disabled -> return
-                            ( result
-                            , mempty { statDisabled = 1 } )
-                Nothing -> return (result, mempty {statFailures = 1})
-            Success -> return (result, mempty { statSuccesses = 1 })
-            Failure _ -> return (result, mempty { statFailures = 1 })
+                Just Disabled -> do
+                  printResultLine result False
+                  return ( result
+                         , mempty { statDisabled = 1 } )
+                Nothing -> do
+                  printResultLine result False
+                  return (result, mempty {statFailures = 1})
+            Success -> do
+              printResultLine result False
+              return (result, mempty { statSuccesses = 1 })
+            Failure _ -> do
+              printResultLine result False
+              return (result, mempty { statFailures = 1 })
 
           let result'' = result' { resultTime = resultTime result }
-
-          printResultLine result'' False
 
           rDesc <- formatMessage $ resultDescription result''
           when (not $ null rDesc) $ (case getResultType result'' of
@@ -416,6 +404,33 @@ produceOutput opts tree =
           , foldGroup = handleGroup
           }
           opts tree
+
+printTestOutput :: (?colors :: Bool) => String -> TestName -> Result -> IO Statistics
+printTestOutput prefix name result = case resultOutcome result of
+  Failure (TestThrewException e) ->
+    case fromException e of
+      Just (Mismatch (GRNoGolden a shw _)) -> do
+        infoFail $ printf "%sActual value is:\n" prefix
+        let a' = runIdentity a
+        shw' <- shw a'
+        hsep
+        printValue name shw'
+        hsep
+        return ( mempty { statFailures = 1 } )
+      Just (Mismatch (GRDifferent _ _ diff _)) -> do
+        infoFail $ printf "%sDiff between actual and golden value:\n" prefix
+        hsep
+        printDiff name diff
+        hsep
+        return ( mempty { statFailures = 1 } )
+      Just (Mismatch _) -> error "Impossible case!"
+      Just Disabled -> return ( mempty { statDisabled = 1 } )
+      Nothing -> return ( mempty { statFailures = 1 } )
+  Failure _ -> return ( mempty { statFailures = 1 } )
+  Success -> return ( mempty { statSuccesses = 1 } )
+
+hsep :: IO ()
+hsep = putStrLn (replicate 40 '=')
 
 foldTestOutput
   :: (?colors :: Bool, Monoid b)

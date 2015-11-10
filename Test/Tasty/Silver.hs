@@ -56,7 +56,6 @@ module Test.Tasty.Silver
 
 import Test.Tasty.Providers
 import Test.Tasty.Silver.Advanced
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
 import System.Exit
 #if __GLASGOW_HASKELL__ < 710

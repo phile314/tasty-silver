@@ -27,7 +27,7 @@ data Golden =
         (IO a)            -- Get actual value.
         (a -> a -> IO GDiff)                       -- Compare/diff.
         (a -> IO GShow)                            -- How to produce a show.
-        (a -> IO ())                            -- Update golden value.
+        (Maybe (a -> IO ()))                       -- Update golden value.
   deriving Typeable
 
 
@@ -71,10 +71,10 @@ instance IsTest Golden where
     (r, gr) <- runGolden golden
     let (AcceptTests accept) = lookupOption opts :: AcceptTests
     case gr of
-      GRNoGolden act _ upd | accept -> do
+      GRNoGolden act _ (Just upd) | accept -> do
             act >>= upd
             return $ testPassed "Created golden file."
-      GRDifferent _ act _ upd | accept -> do
+      GRDifferent _ act _ (Just upd) | accept -> do
             upd act
             return $ testPassed "Updated golden file."
       _ -> return r
@@ -90,11 +90,11 @@ data GoldenResult' m
         (a)     -- golden
         (a)     -- actual
         (GDiff) -- diff
-        (a -> IO ()) -- update
+        (Maybe (a -> IO ())) -- update
   | forall a . GRNoGolden
         (m a) -- compute actual (we don't want to compute it if it is not used)
         (a -> IO GShow) --show
-        (a -> IO ()) -- update
+        (Maybe (a -> IO ())) -- update
 
 runGolden :: Golden -> IO (Result, GoldenResult)
 runGolden (Golden getGolden getActual cmp shw upd) = do

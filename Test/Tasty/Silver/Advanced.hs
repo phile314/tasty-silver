@@ -5,6 +5,7 @@ module Test.Tasty.Silver.Advanced
     goldenTest1,
 
     goldenTestIO,
+    goldenTestIO1,
     goldenTest,
 
     GShow (..),
@@ -80,4 +81,23 @@ goldenTestIO
   -> (a -> IO GShow) -- ^ Show the golden/actual value.
   -> (a -> IO ()) -- ^ update the golden file
   -> TestTree
-goldenTestIO t golden test diff shw upd = singleTest t $ Golden golden test diff shw upd
+goldenTestIO t golden test diff shw upd = goldenTestIO1 t golden test diff shw (Just upd)
+
+-- | A very general testing function.
+-- Experimental function, may change in later versions!
+-- The IO version of show/diff are useful when using external diff or show mechanisms. If IO is not required,
+-- the `goldenTest1` function should be used instead.
+goldenTestIO1
+  :: TestName -- ^ test name
+  -> (IO (Maybe a)) -- ^ get the golden correct value
+  -> (IO a) -- ^ get the tested value
+  -> (a -> a -> IO GDiff)
+    -- ^ comparison function.
+    --
+    -- If two values are the same, it should return 'Equal'. If they are
+    -- different, it should return a diff representation.
+    -- First argument is golden value.
+  -> (a -> IO GShow) -- ^ Show the golden/actual value.
+  -> (Maybe (a -> IO ())) -- ^ update the golden file
+  -> TestTree
+goldenTestIO1 t golden test diff shw upd = singleTest t $ Golden golden test diff shw upd
