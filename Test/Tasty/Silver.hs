@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 {- |
-This module provides a simplified interface. If you want more, see "Test.Tasty.Golden.Advanced".
+This module provides a simplified interface. If you want more, see "Test.Tasty.Silver.Advanced".
 
 Note about filenames. They are looked up in the usual way, thus relative
 names are relative to the processes current working directory.
