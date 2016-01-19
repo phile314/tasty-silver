@@ -17,7 +17,7 @@ license:             MIT
 license-file:        LICENSE
 Homepage:            https://github.com/phile314/tasty-silver
 Bug-reports:         https://github.com/phile314/tasty-silver/issues
-author:              Roman Cheplyaka, Philipp Hausmann and others
+author:              Philipp Hausmann, Roman Cheplyaka and others
 maintainer:          Philipp Hausmann
 -- copyright:           
 category:            Testing
