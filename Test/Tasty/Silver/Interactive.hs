@@ -5,6 +5,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | Golden test management, interactive mode. Runs the tests, and asks
 -- the user how to proceed in case of failure or missing golden standard.
 module Test.Tasty.Silver.Interactive
