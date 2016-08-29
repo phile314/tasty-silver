@@ -56,6 +56,7 @@ import Options.Applicative hiding (Failure, Success)
 import System.Process.ByteString as PS
 import System.Process
 import qualified Data.ByteString as BS
+import System.Directory
 import System.IO
 import System.IO.Temp
 import System.FilePath
@@ -179,27 +180,36 @@ runTestsInteractive dis opts tests = do
 
 
 printDiff :: TestName -> GDiff -> IO ()
-printDiff n (DiffText _ tGold tAct) = withDiffEnv
+printDiff n (DiffText _ tGold tAct) = withDiffEnv n tGold tAct
   (\fGold fAct -> do
         (_, stdOut, _) <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text " ++ fGold ++ " " ++ fAct] T.empty
         TIO.putStrLn stdOut
 
   )
-  n tGold tAct
 printDiff _ (ShowDiffed _ t) = TIO.putStrLn t
 printDiff _ Equal = error "Can't print diff for equal values."
 
 showDiff :: TestName -> GDiff -> IO ()
-showDiff n (DiffText _ tGold tAct) = withDiffEnv
-  (\fGold fAct -> callProcess "sh"
-        ["-c", "git diff --color=always --no-index --text " ++ fGold ++ " " ++ fAct ++ " | less -r > /dev/tty"])
-  n tGold tAct
+showDiff n (DiffText _ tGold tAct) = do
+  hasColorDiff' <- hasColorDiff
+
+  withDiffEnv n tGold tAct
+    (if hasColorDiff' then colorDiff else gitDiff)
+  where
+    gitDiff fGold fAct = callProcess "sh"
+        ["-c", "git diff --color=always --no-index --text " ++ fGold ++ " " ++ fAct ++ " | less -r > /dev/tty"]
+
+    doesCmdExist cmd = isJust <$> findExecutable cmd
+
+    hasColorDiff = (&&) <$> doesCmdExist "wdiff" <*> doesCmdExist "colordiff"
+
+    colorDiff fGold fAct = callProcess "sh" ["-c", "wdiff " ++ fGold ++ " " ++ fAct ++ " | colordiff | less -r > /dev/tty"]
 showDiff n (ShowDiffed _ t) = showInLess n t
 showDiff _ Equal = error "Can't show diff for equal values."
 
 -- Stores the golden/actual text in two files, so we can use it for git diff.
-withDiffEnv :: (FilePath -> FilePath -> IO ()) -> TestName -> T.Text -> T.Text -> IO ()
-withDiffEnv cont n tGold tAct = do
+withDiffEnv :: TestName -> T.Text -> T.Text -> (FilePath -> FilePath -> IO ()) -> IO ()
+withDiffEnv n tGold tAct cont = do
   withSystemTempFile (n <.> "golden") (\fGold hGold -> do
     withSystemTempFile (n <.> "actual") (\fAct hAct -> do
       hSetBinaryMode hGold True
