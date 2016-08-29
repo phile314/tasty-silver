@@ -1,6 +1,16 @@
 Changes
 =======
 
+Version 3.1.8.1
+---------------
+
+* Fix compilation with GHC 8.
+
+Version 3.1.8
+-------------
+
+* Make update function optional for test cases.
+
 Version 3.1.7
 -------------
 
