@@ -13,6 +13,7 @@ import Data.ByteString as SB
 import System.IO.Error
 import qualified Data.Text as T
 import Options.Applicative
+import Data.Monoid
 import Data.Tagged
 import Data.Proxy
 import Data.Maybe
