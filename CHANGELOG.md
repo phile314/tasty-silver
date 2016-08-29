@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 3.1.9
+-------------
+
+* Fix compilation with optparse-applicative 0.13.*.
+* Provide character-level diff if wdiff and colordiff are available.
+
 Version 3.1.8.1
 ---------------
 
