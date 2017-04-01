@@ -57,6 +57,7 @@ import System.Process.ByteString as PS
 import System.Process
 import qualified Data.ByteString as BS
 import System.Directory
+import System.Exit
 import System.IO
 import System.IO.Temp
 import System.FilePath
@@ -180,12 +181,23 @@ runTestsInteractive dis opts tests = do
 
 
 printDiff :: TestName -> GDiff -> IO ()
-printDiff n (DiffText _ tGold tAct) = withDiffEnv n tGold tAct
-  (\fGold fAct -> do
-        (_, stdOut, _) <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text " ++ fGold ++ " " ++ fAct] T.empty
-        TIO.putStrLn stdOut
+printDiff n (DiffText _ tGold tAct) = do
+  hasGit <- doesCmdExist "git"
+  if hasGit then
+    withDiffEnv n tGold tAct
+      (\fGold fAct -> do
+        ret <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text " ++ fGold ++ " " ++ fAct] T.empty
+	case ret of
+	  (ExitSuccess, stdOut, _) -> TIO.putStrLn stdOut
+	  _ -> error ("Call to `git diff` failed: " ++ show ret)
 
-  )
+      )
+  else do
+    putStrLn "`git diff` not available, cannot produce a diff."
+    putStrLn "Golden value:"
+    TIO.putStrLn tGold
+    putStrLn "Actual value:"
+    TIO.putStrLn tAct
 printDiff _ (ShowDiffed _ t) = TIO.putStrLn t
 printDiff _ Equal = error "Can't print diff for equal values."
 
@@ -199,13 +211,14 @@ showDiff n (DiffText _ tGold tAct) = do
     gitDiff fGold fAct = callProcess "sh"
         ["-c", "git diff --color=always --no-index --text " ++ fGold ++ " " ++ fAct ++ " | less -r > /dev/tty"]
 
-    doesCmdExist cmd = isJust <$> findExecutable cmd
-
     hasColorDiff = (&&) <$> doesCmdExist "wdiff" <*> doesCmdExist "colordiff"
 
     colorDiff fGold fAct = callProcess "sh" ["-c", "wdiff " ++ fGold ++ " " ++ fAct ++ " | colordiff | less -r > /dev/tty"]
 showDiff n (ShowDiffed _ t) = showInLess n t
 showDiff _ Equal = error "Can't show diff for equal values."
+
+doesCmdExist :: String -> IO Bool
+doesCmdExist cmd = isJust <$> findExecutable cmd
 
 -- Stores the golden/actual text in two files, so we can use it for git diff.
 withDiffEnv :: TestName -> T.Text -> T.Text -> (FilePath -> FilePath -> IO ()) -> IO ()
@@ -231,9 +244,17 @@ showValue n (ShowText t) = showInLess n t
 
 showInLess :: String -> T.Text -> IO ()
 showInLess _ t = do
-  -- TODO error handling...
-  _ <- PS.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] inp
-  return ()
+  isTerm <- hSupportsANSI stdout
+  putStrLn "Showing value in less"
+  putStrLn $ show (isTerm, t)
+  if isTerm
+    then do
+      ret <- PS.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] inp
+      case ret of
+        ret@(ExitFailure _, _, _) -> error $ show ret
+        _ -> return ()
+    else
+      TIO.putStrLn t
   where inp = encodeUtf8 t
 
 tryAccept :: String -> TestName -> (a -> IO ()) -> a -> IO Bool
@@ -339,7 +360,7 @@ produceOutput opts tree =
           (result', stat') <- case (resultOutcome result) of
             Failure (TestThrewException e) ->
               case fromException e of
-                Just (Mismatch (GRDifferent _ a diff Nothing)) -> do
+                Just (Mismatch (GRDifferent _ _ _ Nothing)) -> do
                   printResultLine result False
                   s <- printTestOutput pref name result
                   return (testFailed "", s)
