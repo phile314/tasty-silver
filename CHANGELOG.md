@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.10
+--------------
+
+* Better error handling for calls to external tools (`git diff`)
+
 Version 3.1.9
 -------------
 
