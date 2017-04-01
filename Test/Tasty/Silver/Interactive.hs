@@ -245,8 +245,6 @@ showValue n (ShowText t) = showInLess n t
 showInLess :: String -> T.Text -> IO ()
 showInLess _ t = do
   isTerm <- hSupportsANSI stdout
-  putStrLn "Showing value in less"
-  putStrLn $ show (isTerm, t)
   if isTerm
     then do
       ret <- PS.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] inp
