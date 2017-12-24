@@ -25,12 +25,6 @@ import Data.Typeable
 import Data.Maybe
 import Data.Monoid
 import qualified Data.List as L
-#if __GLASGOW_HASKELL__ < 708
-import Data.Foldable (foldMap)
-#endif
-#if __GLASGOW_HASKELL__ < 708
-import Data.Proxy
-#endif
 import Options.Applicative
 import qualified Text.Regex.TDFA.String as RS
 import qualified Text.Regex.TDFA as R

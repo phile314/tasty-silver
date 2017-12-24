@@ -36,14 +36,8 @@ import Data.Maybe
 import Data.Monoid hiding ((<>))
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Text.IO as TIO
-#if __GLASGOW_HASKELL__ < 708
-import Data.Foldable (foldMap)
-#endif
 import Data.Char
 import qualified Data.IntMap as IntMap
-#if __GLASGOW_HASKELL__ < 708
-import Data.Proxy
-#endif
 import Control.Monad.State hiding (fail)
 import Control.Monad.STM
 import Control.Monad.Reader hiding (fail)

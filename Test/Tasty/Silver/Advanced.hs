@@ -18,9 +18,6 @@ where
 
 import Test.Tasty.Providers
 import Test.Tasty.Silver.Internal
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative
-#endif
 import qualified Data.Text as T
 
 -- | A very general testing function. Use 'goldenTest1' instead if you can.

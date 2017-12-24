@@ -58,9 +58,6 @@ import Test.Tasty.Providers
 import Test.Tasty.Silver.Advanced
 import qualified Data.ByteString as BS
 import System.Exit
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative
-#endif
 import qualified Data.Text as T
 import System.Process.Text as PT
 import System.Directory
