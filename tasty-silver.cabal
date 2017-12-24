@@ -41,7 +41,7 @@ library
                        Test.Tasty.Silver.Internal
 
   if impl(ghc >= 8.2.2)
-    ghc-options: -Wall -Wcompat
+    ghc-options: -Wall -Wcompat -Wno-name-shadowing
 
   build-depends:
     ansi-terminal >= 0.6.2.1,

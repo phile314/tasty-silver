@@ -33,7 +33,8 @@ import Test.Tasty.Silver.Interactive.Run
 import Data.Typeable
 import Data.Tagged
 import Data.Maybe
-import Data.Monoid
+import Data.Monoid hiding ((<>))
+import Data.Semigroup (Semigroup(..))
 import qualified Data.Text.IO as TIO
 #if __GLASGOW_HASKELL__ < 708
 import Data.Foldable (foldMap)
@@ -291,11 +292,14 @@ data TestOutput
   | Skip
   | Seq TestOutput TestOutput
 
+instance Semigroup TestOutput where
+  (<>) = Seq
+
 -- The monoid laws should hold observationally w.r.t. the semantics defined
 -- in this module
 instance Monoid TestOutput where
   mempty = Skip
-  mappend = Seq
+  mappend = (<>)
 
 type Level = Int
 
@@ -580,9 +584,13 @@ data Statistics = Statistics
   , statDisabled :: !Int
   }
 
+instance Semigroup Statistics where
+  Statistics a1 b1 c1 d1 e1 <> Statistics a2 b2 c2 d2 e2 = Statistics (a1 + a2) (b1 + b2) (c1 + c2) (d1 + d2) (e1 + e2)
+  
+
 instance Monoid Statistics where
-  Statistics a1 b1 c1 d1 e1 `mappend` Statistics a2 b2 c2 d2 e2 = Statistics (a1 + a2) (b1 + b2) (c1 + c2) (d1 + d2) (e1 + e2)
   mempty = Statistics 0 0 0 0 0
+  mappend = (<>)
 
 printStatistics :: (?colors :: Bool) => Statistics -> Time -> IO ()
 printStatistics st time = do
@@ -606,15 +614,15 @@ data FailureStatus
   | Failed
   | OK
 
+instance Semigroup FailureStatus where
+  Failed  <> _      = Failed
+  _       <> Failed = Failed
+  OK      <> OK     = OK
+  _       <> _      = Unknown
+
 instance Monoid FailureStatus where
-  mappend Failed _ = Failed
-  mappend _ Failed = Failed
-
-  mappend OK OK = OK
-
-  mappend _ _ = Unknown
-
   mempty = OK
+  mappend = (<>)
 
 -- }}}
 
@@ -743,12 +751,15 @@ data Maximum a
   = Maximum a
   | MinusInfinity
 
+instance Ord a => Semigroup (Maximum a) where
+  Maximum a <> Maximum b = Maximum (a `max` b)
+  MinusInfinity <> a = a
+  a <> MinusInfinity = a
+
 instance Ord a => Monoid (Maximum a) where
   mempty = MinusInfinity
+  mappend = (<>)
 
-  Maximum a `mappend` Maximum b = Maximum (a `max` b)
-  MinusInfinity `mappend` a = a
-  a `mappend` MinusInfinity = a
 
 -- | Compute the amount of space needed to align "OK"s and "FAIL"s
 computeAlignment :: OptionSet -> TestTree -> Int
