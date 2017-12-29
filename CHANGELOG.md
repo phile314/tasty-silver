@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.11
+--------------
+
+* Fix compilation with GHC 8.4
+
 Version 3.1.10
 --------------
 
