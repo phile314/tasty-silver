@@ -33,7 +33,7 @@ import Test.Tasty.Silver.Interactive.Run
 import Data.Typeable
 import Data.Tagged
 import Data.Maybe
-import Data.Monoid hiding ((<>))
+import Data.Monoid ( Any(..) )
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Text.IO as TIO
 import Data.Char
