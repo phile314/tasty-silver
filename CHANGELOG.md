@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.12
+--------------
+
+* Fix compilation with GHC 8.4 (thanks to asr)
+
 Version 3.1.11
 --------------
 

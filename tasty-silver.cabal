@@ -1,5 +1,5 @@
 name:                tasty-silver
-version:             3.1.11
+version:             3.1.12
 synopsis:            A fancy test runner, including support for golden tests.
 description:
   This package provides a fancy test runner and support for «golden testing».
@@ -24,7 +24,7 @@ category:            Testing
 build-type:          Simple
 cabal-version:       >=1.14
 extra-source-files:  CHANGELOG.md
-tested-with:         GHC == 7.10.3, GHC == 8.0.1, GHC == 8.2.2
+tested-with:         GHC == 8.0.1, GHC == 8.2.2, GHC == 8.6.1
 
 Source-repository head
   type:     git
