@@ -181,7 +181,7 @@ printDiff n (DiffText _ tGold tAct) = do
   if hasGit then
     withDiffEnv n tGold tAct
       (\fGold fAct -> do
-        ret <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text " ++ fGold ++ " " ++ fAct] T.empty
+        ret <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text " ++ shellEscape fGold ++ " " ++ shellEscape fAct] T.empty
         case ret of
           (ExitSuccess, stdOut, _) -> TIO.putStrLn stdOut
           _ -> error ("Call to `git diff` failed: " ++ show ret)
@@ -799,3 +799,8 @@ output bold intensity color st
   | otherwise = putStr st
 
 -- }}}
+
+
+-- Hacky shell escape approach to fix calling sh on windows ...
+shellEscape :: String -> String
+shellEscape = concatMap (\s -> if s == '\\' then "\\\\" else [s])
