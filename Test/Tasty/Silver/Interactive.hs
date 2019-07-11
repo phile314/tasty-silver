@@ -107,6 +107,7 @@ interactiveTests :: DisabledTests
 interactiveTests dis = TestManager
     [ Option (Proxy :: Proxy Interactive)
     , Option (Proxy :: Proxy HideSuccesses)
+    , Option (Proxy :: Proxy AnsiTricks)
     , Option (Proxy :: Proxy UseColor)
     , Option (Proxy :: Proxy NumThreads)
     , Option (Proxy :: Proxy ExcludeFilters)
@@ -151,6 +152,7 @@ runTestsInteractive dis opts tests = do
       let
         whenColor = lookupOption opts
         HideSuccesses hideSuccesses = lookupOption opts
+        AnsiTricks ansiTricks = lookupOption opts
 
       let
         ?colors = useColor whenColor isTerm
@@ -159,7 +161,7 @@ runTestsInteractive dis opts tests = do
         outp = produceOutput opts tests
 
       stats <- case () of { _
-        | hideSuccesses && isTerm ->
+        | hideSuccesses && isTerm && ansiTricks ->
             consoleOutputHidingSuccesses outp smap
         | hideSuccesses && not isTerm ->
             streamOutputHidingSuccesses outp smap
@@ -633,6 +635,18 @@ instance IsOption HideSuccesses where
   optionName = return "hide-successes"
   optionHelp = return "Do not print tests that passed successfully"
   optionCLParser = flagCLParser Nothing (HideSuccesses True)
+
+newtype AnsiTricks = AnsiTricks Bool
+   deriving Typeable
+
+instance IsOption AnsiTricks where
+  defaultValue = AnsiTricks True
+  parseValue = fmap AnsiTricks . safeReadBool
+  optionName = return "ansi-tricks"
+  optionHelp = return $
+    -- Multiline literals don't work because of -XCPP.
+    "Enable various ANSI terminal tricks. " ++
+    "Can be set to 'true' (default) or 'false'."
 
 -- | When to use color on the output
 data UseColor
