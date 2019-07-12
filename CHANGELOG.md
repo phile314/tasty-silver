@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.13
+--------------
+
+* Add option to disable ansi tricks (#18, thanks to L-TChen)
+
 Version 3.1.12
 --------------
 
