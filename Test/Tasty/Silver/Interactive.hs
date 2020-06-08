@@ -183,7 +183,7 @@ printDiff n (DiffText _ tGold tAct) = do
   if hasGit then
     withDiffEnv n tGold tAct
       (\fGold fAct -> do
-        ret <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text --exit-code" ++ fGold ++ " " ++ fAct] T.empty
+        ret <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text --exit-code " ++ fGold ++ " " ++ fAct] T.empty
         case ret of
          (ExitSuccess, stdOut, _)   -> TIO.putStrLn stdOut
          (ExitFailure 1, stdOut, _) -> TIO.putStrLn stdOut
