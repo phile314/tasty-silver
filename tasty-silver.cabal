@@ -1,5 +1,5 @@
 name:                tasty-silver
-version:             3.1.14
+version:             3.1.15
 synopsis:            A fancy test runner, including support for golden tests.
 description:
   This package provides a fancy test runner and support for «golden testing».

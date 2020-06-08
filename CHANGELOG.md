@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.15
+--------------
+
+* Fix missing space in git diff calls introduced in v3.1.14 (#22, thanks to croyzor)
+
 Version 3.1.14
 --------------
 
