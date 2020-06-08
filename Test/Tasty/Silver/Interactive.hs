@@ -185,8 +185,9 @@ printDiff n (DiffText _ tGold tAct) = do
       (\fGold fAct -> do
         ret <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text --exit-code" ++ fGold ++ " " ++ fAct] T.empty
         case ret of
-         ret@(ExitFailure 2, _, _) -> error ("Call to `git diff` failed: " ++ show ret)
-         (_, stdOut, _) -> TIO.putStrLn stdOut
+         (ExitSuccess, stdOut, _)   -> TIO.putStrLn stdOut
+         (ExitFailure 1, stdOut, _) -> TIO.putStrLn stdOut
+         ret@(ExitFailure _, _, _)  -> error ("Call to `git diff` failed: " ++ show ret)
       )
   else do
     putStrLn "`git diff` not available, cannot produce a diff."
