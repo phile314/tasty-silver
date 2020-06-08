@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.1.14
+--------------
+
+* Fix wrong interpretation of git diff exit codes (#21, thanks to croyzor)
+
 Version 3.1.13
 --------------
 
