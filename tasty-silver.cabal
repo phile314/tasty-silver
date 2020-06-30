@@ -57,12 +57,13 @@ library
     process >= 1.2,
     process-extras >= 0.2,
     regex-tdfa >= 1.2.0,
-    semigroups >= 0.18.3,
     stm >= 2.4.2,
     tagged,
     tasty >= 0.8,
     temporary,
     text >= 0.11.0.0
+  if !impl(ghc >= 8.0)
+    build-depends: semigroups >= 0.18.3
 
 Test-suite test
   Default-language:
