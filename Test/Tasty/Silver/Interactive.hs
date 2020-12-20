@@ -418,8 +418,8 @@ produceOutput opts tree =
       let handleTestResult' = (if isInteractive then handleTestResultInteractive else handleTestResult)
       return $ HandleTest name printTestName handleTestResult'
 
-    handleGroup :: TestName -> Ap (Reader Level) TestOutput -> Ap (Reader Level) TestOutput
-    handleGroup name grp = Ap $ do
+    handleGroup :: OptionSet -> TestName -> Ap (Reader Level) TestOutput -> Ap (Reader Level) TestOutput
+    handleGroup _ name grp = Ap $ do
       level <- ask
       let
         printHeading = printf "%s%s\n" (indent level) name
@@ -777,7 +777,7 @@ computeAlignment opts =
   foldTestTree
     trivialFold
       { foldSingle = \_ name _ level -> Maximum (length name + level)
-      , foldGroup = \_ m -> m . (+ indentSize)
+      , foldGroup = \_ _ m -> m . (+ indentSize)
       }
     opts
   where

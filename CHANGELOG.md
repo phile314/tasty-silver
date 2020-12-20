@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.2
+-----------
+
+* Compatibility with tasty 1.4 (breaks compatibility with older versions of tasty)
+
 Version 3.1.15
 --------------
 

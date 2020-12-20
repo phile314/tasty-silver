@@ -59,7 +59,7 @@ library
     regex-tdfa >= 1.2.0,
     stm >= 2.4.2,
     tagged,
-    tasty >= 0.8,
+    tasty >= 1.4,
     temporary,
     text >= 0.11.0.0
   if !impl(ghc >= 8.0)
@@ -76,7 +76,7 @@ Test-suite test
     test.hs
   Build-depends:
       base >= 4 && < 5
-    , tasty >= 0.8
+    , tasty >= 1.4
     , tasty-hunit
     , tasty-silver
     , filepath
