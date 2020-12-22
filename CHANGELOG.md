@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.2.1
+-------------
+
+* Fix option parser (#25)
+
 Version 3.2
 -----------
 
