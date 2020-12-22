@@ -38,12 +38,7 @@ instance IsOption AcceptTests where
   parseValue = fmap AcceptTests . safeRead
   optionName = return "accept"
   optionHelp = return "Accept current results of golden tests"
-  optionCLParser =
-    fmap AcceptTests $
-    switch
-      (  long (untag (optionName :: Tagged AcceptTests String))
-      <> help (untag (optionHelp :: Tagged AcceptTests String))
-      )
+  optionCLParser =  flagCLParser Nothing (AcceptTests True)
 
 -- | Read the file if it exists, else return Nothing.
 -- Useful for reading golden files.
