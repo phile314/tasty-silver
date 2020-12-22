@@ -112,6 +112,7 @@ interactiveTests dis = TestManager
     , Option (Proxy :: Proxy NumThreads)
     , Option (Proxy :: Proxy ExcludeFilters)
     , Option (Proxy :: Proxy IncludeFilters)
+    , Option (Proxy :: Proxy AcceptTests)
     ] $
   \opts tree ->
       Just $ runTestsInteractive dis opts (filterWithRegex opts tree)

@@ -66,7 +66,7 @@ compileRegex :: String -> Maybe RS.Regex
 compileRegex = either (const Nothing) Just . RS.compile R.defaultCompOpt R.defaultExecOpt
 
 parseFilter :: forall v . IsOption v => (String -> RegexFilter) -> ([RegexFilter] -> v) -> Parser v
-parseFilter mkRF mkV = mkV <$> many ( option parse ( long name <> help helpString))
+parseFilter mkRF mkV = mkV <$> some ( option parse ( long name <> help helpString))
   where
     name = untag (optionName :: Tagged v String)
     helpString = untag (optionHelp :: Tagged v String)

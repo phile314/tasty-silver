@@ -62,8 +62,8 @@ testWithResource = testCase "withResource" $ do
 
 testCheckRF :: TestTree
 testCheckRF = testGroup "Filter.checkRF"
-    [ testCase "empty1" $ checkRF True [] "/" @?= True
-    , testCase "empty1" $ checkRF False [] "/" @?= False
-    , testCase "empty2" $ checkRF True [] "/sdfg" @?= True
-    , testCase "empty2" $ checkRF False [] "/sdfg" @?= False
+    [ testCase "empty1a" $ checkRF True [] "/" @?= True
+    , testCase "empty1b" $ checkRF False [] "/" @?= False
+    , testCase "empty2a" $ checkRF True [] "/sdfg" @?= True
+    , testCase "empty2b" $ checkRF False [] "/sdfg" @?= False
     ]
