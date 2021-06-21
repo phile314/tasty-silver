@@ -22,7 +22,7 @@ maintainer:          Philipp Hausmann
 -- copyright:           
 category:            Testing
 build-type:          Simple
-cabal-version:       >=1.14
+cabal-version:       1.14
 extra-source-files:  CHANGELOG.md
 tested-with:         GHC == 8.0.1, GHC == 8.2.2, GHC == 8.6.1
 
