@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.2.2
+---------------
+
+* Fix cabal warning (#27, thanks to felixonmars)
+
 Version 3.2.1
 -------------
 
