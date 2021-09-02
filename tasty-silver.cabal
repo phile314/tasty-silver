@@ -1,5 +1,5 @@
 name:                tasty-silver
-version:             3.2.2
+version:             3.2.3
 synopsis:            A fancy test runner, including support for golden tests.
 description:
   This package provides a fancy test runner and support for «golden testing».
@@ -18,13 +18,25 @@ license-file:        LICENSE
 Homepage:            https://github.com/phile314/tasty-silver
 Bug-reports:         https://github.com/phile314/tasty-silver/issues
 author:              Philipp Hausmann, Roman Cheplyaka and others
-maintainer:          Philipp Hausmann
--- copyright:           
+maintainer:          Philipp Hausmann, Andreas Abel
+-- copyright:
 category:            Testing
 build-type:          Simple
 cabal-version:       1.14
 extra-source-files:  CHANGELOG.md
-tested-with:         GHC == 8.0.1, GHC == 8.2.2, GHC == 8.6.1
+tested-with:
+  GHC == 9.0.1
+  GHC == 8.10.4
+  GHC == 8.8.4
+  GHC == 8.6.5
+  GHC == 8.4.4
+  GHC == 8.2.2
+  GHC == 8.0.2
+  GHC == 7.10.3
+  GHC == 7.8.4
+  GHC == 7.6.3
+  GHC == 7.4.2
+
 
 Source-repository head
   type:     git
@@ -62,7 +74,7 @@ library
     tasty >= 1.4,
     temporary,
     text >= 0.11.0.0
-  if !impl(ghc >= 8.0)
+  if impl(ghc < 8.0)
     build-depends: semigroups >= 0.18.3
 
 Test-suite test

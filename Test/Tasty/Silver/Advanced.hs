@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes, OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
+
 module Test.Tasty.Silver.Advanced
   ( -- * The main function
     goldenTest1,
@@ -15,6 +16,10 @@ module Test.Tasty.Silver.Advanced
     readFileMaybe
   )
 where
+
+#if !(MIN_VERSION_base(4,8,0))
+import Data.Functor ( (<$>) )
+#endif
 
 import Test.Tasty.Providers
 import Test.Tasty.Silver.Internal

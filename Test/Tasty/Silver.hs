@@ -54,19 +54,22 @@ module Test.Tasty.Silver
   )
   where
 
-import Test.Tasty.Providers
-import Test.Tasty.Silver.Advanced
-import qualified Data.ByteString as BS
-import System.Exit
-import qualified Data.Text as T
-import System.Process.Text as PT
-import System.Directory
-import System.FilePath
-import qualified Data.Set as Set
 import Control.Monad
-
+#if !(MIN_VERSION_base(4,8,0))
+import Data.Functor ( (<$>) )
+#endif
+import qualified Data.ByteString as BS
+import qualified Data.Set as Set
+import qualified Data.Text as T
 import Data.Text.Encoding
 
+import System.Directory
+import System.Exit
+import System.FilePath
+import System.Process.Text as PT
+
+import Test.Tasty.Providers
+import Test.Tasty.Silver.Advanced
 
 -- | Compare a given file contents against the golden file contents. Assumes that both text files are utf8 encoded.
 goldenVsFile

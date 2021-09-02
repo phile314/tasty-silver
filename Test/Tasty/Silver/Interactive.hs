@@ -1,13 +1,17 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, PatternGuards, DeriveDataTypeable #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- | Golden test management, interactive mode. Runs the tests, and asks
 -- the user how to proceed in case of failure or missing golden standard.
+
 module Test.Tasty.Silver.Interactive
   (
   -- * Command line helpers
@@ -24,41 +28,51 @@ module Test.Tasty.Silver.Interactive
   where
 
 import Prelude hiding (fail)
-import Test.Tasty hiding (defaultMain)
-import Test.Tasty.Runners
-import Test.Tasty.Options
-import Test.Tasty.Silver.Filter
-import Test.Tasty.Silver.Internal
-import Test.Tasty.Silver.Interactive.Run
-import Data.Typeable
-import Data.Tagged
-import Data.Maybe
-import Data.Monoid ( Any(..) )
-import Data.Semigroup (Semigroup(..))
-import qualified Data.Text.IO as TIO
-import Data.Char
-import qualified Data.IntMap as IntMap
-import Control.Monad.State hiding (fail)
-import Control.Monad.STM
-import Control.Monad.Reader hiding (fail)
-import Control.Monad.Identity hiding (fail)
+
 import Control.Concurrent.STM.TVar
 import Control.Exception
-import Text.Printf
-import qualified Data.Text as T
+import Control.Monad.Identity hiding (fail)
+import Control.Monad.Reader hiding (fail)
+import Control.Monad.STM
+import Control.Monad.State hiding (fail)
+
+import Data.Char
+import Data.Maybe
+import Data.Monoid ( Any(..) )
+#if !(MIN_VERSION_base(4,8,0))
+import Data.Monoid ( Monoid(..) )
+#endif
+import Data.Proxy
+import Data.Semigroup (Semigroup(..))
+import Data.Tagged
 import Data.Text.Encoding
-import Options.Applicative hiding (Failure, Success)
-import System.Process.ByteString as PS
-import System.Process
+import Data.Typeable
 import qualified Data.ByteString as BS
+import qualified Data.IntMap as IntMap
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+
+import Options.Applicative hiding (Failure, Success)
+
+import System.Console.ANSI
 import System.Directory
 import System.Exit
+import System.FilePath
 import System.IO
 import System.IO.Temp
-import System.FilePath
-import Test.Tasty.Providers
-import System.Console.ANSI
+import System.Process
+import System.Process.ByteString as PS
 import qualified System.Process.Text as PTL
+
+import Text.Printf
+
+import Test.Tasty hiding (defaultMain)
+import Test.Tasty.Options
+import Test.Tasty.Providers
+import Test.Tasty.Runners
+import Test.Tasty.Silver.Filter
+import Test.Tasty.Silver.Interactive.Run
+import Test.Tasty.Silver.Internal
 
 type DisabledTests = TestPath -> Bool
 
@@ -118,7 +132,7 @@ interactiveTests dis = TestManager
       Just $ runTestsInteractive dis opts (filterWithRegex opts tree)
 
 runSingleTest ::  IsTest t => DisabledTests -> TestPath -> TestName -> OptionSet -> t -> (Progress -> IO ()) -> IO Result
-runSingleTest dis tp _ _ _ _ | dis tp = 
+runSingleTest dis tp _ _ _ _ | dis tp =
   return $ (testFailed "")
     { resultOutcome = (Failure $ TestThrewException $ toException Disabled) }
 runSingleTest _ _ _ opts t cb = do
@@ -584,7 +598,7 @@ data Statistics = Statistics
 
 instance Semigroup Statistics where
   Statistics a1 b1 c1 d1 e1 <> Statistics a2 b2 c2 d2 e2 = Statistics (a1 + a2) (b1 + b2) (c1 + c2) (d1 + d2) (e1 + e2)
-  
+
 
 instance Monoid Statistics where
   mempty = Statistics 0 0 0 0 0

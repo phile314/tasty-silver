@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.2.3
+---------------
+
+* Tested with GHC 7.4 - 9.0 (fixed compilation with GHC 7.4 - 7.8)
+
 Version 3.2.2
 ---------------
 
