@@ -1,0 +1,67 @@
+name: macOS
+
+on:
+  push:
+    branches:
+    - master
+    - ci-*
+    - release*
+    paths:
+    - '.github/workflows/macOS.yml'
+    - 'tasty-silver.cabal'
+    - 'Setup.hs'
+    - 'Test/**.hs'
+    - 'tests/**'
+  pull_request:
+    paths:
+    - '.github/workflows/macOS.yml'
+    - 'tasty-silver.cabal'
+    - 'Setup.hs'
+    - 'Test/**.hs'
+    - 'tests/**'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - uses: haskell/actions/setup@v1
+      id: setup-haskell
+      with:
+        ghc-version:   latest
+        cabal-version: latest
+
+    - name: Configure the build plan
+      run: |
+        cabal update
+        cabal configure -O1 --enable-tests
+
+    - uses: actions/cache@v2
+      name: Cache dependencies
+      id: cache
+      with:
+        path: |
+          ${{ steps.setup-haskell.outputs.cabal-store }}
+        # The file `plan.json` contains the build information.
+        key: macOS-${{ hashFiles('**/plan.json') }}
+
+    - name: Install dependencies
+      if: ${{ !steps.cache.outputs.cache-hit }}
+      run: |
+        cabal build --only-dependencies --enable-tests
+
+    - name: Build
+      run: |
+        cabal build
+
+    - name: Test
+      run: |
+        cabal test
