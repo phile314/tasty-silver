@@ -1,23 +1,31 @@
-{-# LANGUAGE RankNTypes, ExistentialQuantification, DeriveDataTypeable,
-    MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+
 module Test.Tasty.Silver.Internal where
 
 import Control.Exception
 import Control.Monad.Identity
-import Data.Typeable (Typeable)
+
 import Data.ByteString as SB
-import System.IO.Error
-import qualified Data.Text as T
-import Options.Applicative
-import Data.Monoid
-import Data.Tagged
-import Data.Proxy
+#if !(MIN_VERSION_base(4,8,0))
+import Data.Functor ( (<$>) )
+#endif
 import Data.Maybe
+import Data.Proxy
+import Data.Typeable (Typeable)
+import qualified Data.Text as T
+
+import System.IO.Error
+
 import Test.Tasty.Providers
 import Test.Tasty.Options
 
--- | See 'goldenTest1' for explanation of the fields
+-- | See 'goldenTest1' for explanation of the fields.
+
 data Golden =
   forall a .
     Golden
@@ -30,7 +38,8 @@ data Golden =
 
 
 -- | This option, when set to 'True', specifies that we should run in the
--- «accept tests» mode
+-- «accept tests» mode.
+
 newtype AcceptTests = AcceptTests Bool
   deriving (Eq, Ord, Typeable)
 instance IsOption AcceptTests where
@@ -42,6 +51,7 @@ instance IsOption AcceptTests where
 
 -- | Read the file if it exists, else return Nothing.
 -- Useful for reading golden files.
+
 readFileMaybe :: FilePath -> IO (Maybe SB.ByteString)
 readFileMaybe path = catchJust
     (\e -> if isDoesNotExistErrorType (ioeGetErrorType e) then Just () else Nothing)
@@ -50,12 +60,17 @@ readFileMaybe path = catchJust
 
 
 -- | The comparison/diff result.
+
 data GDiff
-  = Equal -- ^ Values are equal.
-  | DiffText { gReason :: (Maybe String), gActual :: T.Text, gExpected :: T.Text } -- ^ The two values are different, show a diff between the two given texts.
-  | ShowDiffed { gReason :: (Maybe String), gDiff :: T.Text }  -- ^ The two values are different, just show the given text to the user.
+  = Equal
+      -- ^ Values are equal.
+  | DiffText { gReason :: (Maybe String), gActual :: T.Text, gExpected :: T.Text }
+      -- ^ The two values are different, show a diff between the two given texts.
+  | ShowDiffed { gReason :: (Maybe String), gDiff :: T.Text }
+      -- ^ The two values are different, just show the given text to the user.
 
 -- | How to show a value to the user.
+
 data GShow
   = ShowText T.Text     -- ^ Show the given text.
 

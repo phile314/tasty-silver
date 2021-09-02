@@ -1,10 +1,13 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, PatternGuards, DeriveDataTypeable #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
+
 -- | Regex filtering for test trees.
 module Test.Tasty.Silver.Filter
   ( filterWithRegex
@@ -17,17 +20,23 @@ module Test.Tasty.Silver.Filter
   where
 
 import Prelude hiding (fail)
-import Test.Tasty hiding (defaultMain)
-import Test.Tasty.Runners
-import Test.Tasty.Options
+
+import Data.Maybe
+#if !(MIN_VERSION_base(4,11,0))
+import Data.Semigroup ( (<>) )
+#endif
 import Data.Tagged
 import Data.Typeable
-import Data.Maybe
-import Data.Monoid
 import qualified Data.List as L
+
 import Options.Applicative
+
 import qualified Text.Regex.TDFA.String as RS
 import qualified Text.Regex.TDFA as R
+
+import Test.Tasty hiding (defaultMain)
+import Test.Tasty.Options
+import Test.Tasty.Runners
 
 type TestPath = String
 
@@ -121,4 +130,3 @@ filterWithPred prd tree = fromMaybe emptyTest (filter' "/" tree)
         filter' pth (AskOptions t) = Just $ AskOptions (\o -> fromMaybe emptyTest (filter' pth (t o)))
 
         emptyTest = testGroup "" []
-
