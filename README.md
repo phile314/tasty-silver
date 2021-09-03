@@ -1,4 +1,10 @@
-[![Build Status](https://travis-ci.org/phile314/tasty-silver.svg?branch=master)](https://travis-ci.org/phile314/tasty-silver)
+[![Hackage version](https://img.shields.io/hackage/v/tasty-silver.svg?label=Hackage)](http://hackage.haskell.org/package/tasty-silver)
+[![tasty-silver on Stackage Nightly](https://stackage.org/package/tasty-silver/badge/nightly)](https://stackage.org/nightly/package/tasty-silver)
+[![Stackage LTS version](https://www.stackage.org/package/tasty-silver/badge/lts?label=Stackage)](https://www.stackage.org/package/tasty-silver)
+[![Haskell-CI](https://github.com/phile314/tasty-silver/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/phile314/tasty-silver/actions/workflows/haskell-ci.yml)
+[![macOS](https://github.com/phile314/tasty-silver/actions/workflows/macOS.yml/badge.svg)](https://github.com/phile314/tasty-silver/actions/workflows/macOS.yml)
+[![windows](https://github.com/phile314/tasty-silver/actions/workflows/windows.yml/badge.svg)](https://github.com/phile314/tasty-silver/actions/workflows/windows.yml)
+[![Hackage CI](https://matrix.hackage.haskell.org/api/v2/packages/tasty-silver/badge)](https://matrix.hackage.haskell.org/package/tasty-silver)
 
 Tasty Silver
 ============
@@ -27,3 +33,4 @@ Maintainers
 -----------
 
 [Philipp Hausmann](https://github.com/phile314) is the primary maintainer.
+[Andreas Abel](https://github.com/andreasabel) is co-maintainer.
