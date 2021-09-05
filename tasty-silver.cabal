@@ -99,6 +99,8 @@ Test-suite test
     , filepath
     , directory
     , process
+    , silently >= 1.2.5.1
+        -- Andreas Abel, 2021-09-05, latest silently is today 1.2.5.1
     , temporary
     , transformers >= 0.3
 

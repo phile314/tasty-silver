@@ -1,24 +1,27 @@
 {-# LANGUAGE CPP #-}
 
-import Test.Tasty hiding (defaultMain)
-import Test.Tasty.HUnit
-import Test.Tasty.Silver
-import Test.Tasty.Silver.Interactive
-import Test.Tasty.Runners
-import Test.Tasty.Silver.Advanced
-import Test.Tasty.Silver.Internal
-import Test.Tasty.Options
-import Test.Tasty.Silver.Filter (checkRF)
-
+import Control.Concurrent.MVar
+import Control.Monad (unless)
+import Control.Monad.IO.Class (liftIO)
+import Data.List (sort)
 #if !(MIN_VERSION_base(4,8,0))
 import Data.Monoid (mempty)
 #endif
-import System.IO.Temp
-import System.FilePath
+
 import System.Directory
-import Data.List (sort)
-import Control.Concurrent.MVar
-import Control.Monad.IO.Class (liftIO)
+import System.FilePath
+import System.IO.Silently (capture)
+import System.IO.Temp
+
+import Test.Tasty hiding (defaultMain)
+import Test.Tasty.HUnit
+import Test.Tasty.Options
+import Test.Tasty.Runners
+import Test.Tasty.Silver
+import Test.Tasty.Silver.Advanced
+import Test.Tasty.Silver.Filter (checkRF)
+import Test.Tasty.Silver.Interactive
+import Test.Tasty.Silver.Internal
 
 touch :: FilePath -> IO ()
 touch f = writeFile f ""
@@ -61,7 +64,8 @@ testWithResource =
   testCase "withResource" $
     case tryIngredients [consoleTestReporter] (singleOption $ AcceptTests True) tree of
       Just r' -> do
-        success <- r'
+        (out, success) <- capture r'
+        unless success $ putStr out
         assertBool "Test should succeed." success
       Nothing -> assertFailure "Test broken"
   where
