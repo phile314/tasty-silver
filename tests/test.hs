@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Concurrent.MVar
-import Control.Exception      ( catch, IOException )
+import Control.Exception      ( catch, IOException, SomeException )
 import Control.Monad          ( unless )
 import Control.Monad.IO.Class ( liftIO )
 import Data.List (sort)
@@ -71,17 +71,18 @@ testShowDiff =
         goldenValue = "golden value"
         actualFile  = dir </> "actual.txt"
         actualValue = "actual value"
-        tree        = goldenVsFile "showDiff" goldenFile actualFile $
+        tree        = goldenVsFile "showDiff-internal" goldenFile actualFile $
                         writeFile actualFile actualValue
       writeFile goldenFile goldenValue
       writeFile actualFile actualValue
       do
-          let io = defaultMain tree
-          -- let io = runTestsInteractive (const False) mempty tree
-          (out, success) <- capture $ catch (True <$ io) $ \ (e :: IOException) -> do
+          -- let io = defaultMain tree
+          let io = runTestsInteractive (const False) mempty tree
+          (out, success) <- capture $ catch (True <$ io) $ \ (e :: SomeException) -> do
              print e
              return False
-          unless success $ putStr out
+          -- unless success $ putStr out
+          putStr out
           assertBool "Test should succeed." success
 
 -- | Check if resources are properly initialized.
