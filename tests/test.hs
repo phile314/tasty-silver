@@ -2,7 +2,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Concurrent.MVar
-import Control.Exception      ( catch, IOException, SomeException )
+import Control.Exception as E ( catch, IOException, SomeException )
+  -- Prelude of GHC 7.4 also has @catch@, so we disambiguate with E.catch
 import Control.Monad          ( unless )
 import Control.Monad.IO.Class ( liftIO )
 import Data.List (sort)
@@ -78,7 +79,7 @@ testShowDiff =
       do
           -- let io = defaultMain tree
           let io = runTestsInteractive (const False) mempty tree
-          (out, success) <- capture $ catch (True <$ io) $ \ (e :: SomeException) -> do
+          (out, success) <- capture $ E.catch (True <$ io) $ \ (e :: SomeException) -> do
              print e
              return False
           -- unless success $ putStr out
