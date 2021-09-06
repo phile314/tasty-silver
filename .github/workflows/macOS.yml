@@ -42,7 +42,7 @@ jobs:
     - name: Configure the build plan
       run: |
         cabal update
-        cabal configure -O1 --enable-tests
+        cabal configure -O1 --enable-tests --test-show-details=direct
 
     - uses: actions/cache@v2
       name: Cache dependencies
@@ -64,4 +64,4 @@ jobs:
 
     - name: Test
       run: |
-        cabal test
+        cabal test --test-show-details=direct
