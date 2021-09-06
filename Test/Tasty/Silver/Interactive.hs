@@ -27,14 +27,14 @@ module Test.Tasty.Silver.Interactive
   )
   where
 
-import Prelude hiding (fail)
+import Prelude
 
 import Control.Concurrent.STM.TVar
 import Control.Exception
-import Control.Monad.Identity hiding (fail)
-import Control.Monad.Reader hiding (fail)
+import Control.Monad.Identity
+import Control.Monad.Reader
 import Control.Monad.STM
-import Control.Monad.State hiding (fail)
+import Control.Monad.State
 
 import Data.Char
 import Data.Maybe
@@ -64,7 +64,7 @@ import System.IO
 import System.IO.Temp
 import System.Process
 import System.Process.ByteString as PS
-import qualified System.Process.Text as PTL
+import qualified System.Process.Text as ProcessText
 
 import Text.Printf
 
@@ -156,8 +156,7 @@ runTestsInteractive :: DisabledTests -> OptionSet -> TestTree -> IO Bool
 runTestsInteractive dis opts tests = do
   let tests' = wrapRunTest (runSingleTest dis) tests
 
-  r <- launchTestTree opts tests' $ \smap ->
-    do
+  launchTestTree opts tests' $ \smap -> do
     isTerm <- hSupportsANSI stdout
 
     (\k -> if isTerm
@@ -190,46 +189,54 @@ runTestsInteractive dis opts tests = do
             return $ statFailures stats == 0
 
 
-
-  return r
-
-
 printDiff :: TestName -> GDiff -> IO ()
 printDiff n (DiffText _ tGold tAct) = do
   hasGit <- doesCmdExist "git"
   if hasGit then
-    withDiffEnv n tGold tAct
-      (\fGold fAct -> do
-        ret <- PTL.readProcessWithExitCode "sh" ["-c", "git diff --no-index --text --exit-code " ++ fGold ++ " " ++ fAct] T.empty
-        case ret of
-         (ExitSuccess, stdOut, _)   -> TIO.putStrLn stdOut
-         (ExitFailure 1, stdOut, _) -> TIO.putStrLn stdOut
-         ret@(ExitFailure _, _, _)  -> error ("Call to `git diff` failed: " ++ show ret)
-      )
+    withDiffEnv n tGold tAct $ \ fGold fAct -> do
+      ret@(exitcode, stdOut, stdErr) <-
+        ProcessText.readProcessWithExitCode
+          "git" [ "diff", "--no-index", "--text", "--exit-code", fGold, fAct ]
+          -- "sh" [ "-c", unwords ["git diff --no-index --text --exit-code", fGold, fAct] ]
+          T.empty
+      if T.null stdErr then
+        case exitcode of
+          ExitSuccess   -> TIO.putStrLn stdOut
+          ExitFailure 1 -> TIO.putStrLn stdOut
+          ExitFailure _ -> gitFailed $ show ret
+      else gitFailed $ T.unpack stdErr
   else do
     putStrLn "`git diff` not available, cannot produce a diff."
     putStrLn "Golden value:"
     TIO.putStrLn tGold
     putStrLn "Actual value:"
     TIO.putStrLn tAct
+  where
+  gitFailed msg = fail $ "Call to `git diff` failed: " ++ msg
 printDiff _ (ShowDiffed _ t) = TIO.putStrLn t
 printDiff _ Equal = error "Can't print diff for equal values."
 
+
 showDiff :: TestName -> GDiff -> IO ()
 showDiff n (DiffText _ tGold tAct) = do
-  hasColorDiff' <- hasColorDiff
 
-  withDiffEnv n tGold tAct
-    (if hasColorDiff' then colorDiff else gitDiff)
+  -- hasColorDiff if both wdiff and colordiff exist
+  hasColorDiff <- do
+    hasWDiff <- doesCmdExist "wdiff"
+    if hasWDiff then doesCmdExist "colordiff" else return False
+
+  withDiffEnv n tGold tAct $
+    if hasColorDiff then colorDiff else gitDiff
+
   where
-    gitDiff fGold fAct = callProcess "sh"
-        ["-c", "git diff --color=always --no-index --text " ++ fGold ++ " " ++ fAct ++ " | less -r > /dev/tty"]
+    gitDiff   fGold fAct = callProcess "sh"
+      [ "-c", unwords ["git diff --color=always --no-index --text", fGold, fAct, "| less -r > /dev/tty"] ]
+    colorDiff fGold fAct = callProcess "sh"
+      [ "-c", unwords ["wdiff", fGold, fAct, "| colordiff | less -r > /dev/tty"] ]
 
-    hasColorDiff = (&&) <$> doesCmdExist "wdiff" <*> doesCmdExist "colordiff"
-
-    colorDiff fGold fAct = callProcess "sh" ["-c", "wdiff " ++ fGold ++ " " ++ fAct ++ " | colordiff | less -r > /dev/tty"]
 showDiff n (ShowDiffed _ t) = showInLess n t
 showDiff _ Equal = error "Can't show diff for equal values."
+
 
 doesCmdExist :: String -> IO Bool
 doesCmdExist cmd = isJust <$> findExecutable cmd
@@ -237,8 +244,8 @@ doesCmdExist cmd = isJust <$> findExecutable cmd
 -- Stores the golden/actual text in two files, so we can use it for git diff.
 withDiffEnv :: TestName -> T.Text -> T.Text -> (FilePath -> FilePath -> IO ()) -> IO ()
 withDiffEnv n tGold tAct cont = do
-  withSystemTempFile (n <.> "golden") (\fGold hGold -> do
-    withSystemTempFile (n <.> "actual") (\fAct hAct -> do
+  withSystemTempFile (n <.> "golden") $ \ fGold hGold -> do
+    withSystemTempFile (n <.> "actual") $ \ fAct hAct -> do
       hSetBinaryMode hGold True
       hSetBinaryMode hAct True
       BS.hPut hGold (encodeUtf8 tGold)
@@ -246,8 +253,6 @@ withDiffEnv n tGold tAct cont = do
       hClose hGold
       hClose hAct
       cont fGold fAct
-      )
-    )
 
 
 printValue :: TestName -> GShow -> IO ()
@@ -342,7 +347,7 @@ produceOutput opts tree =
             printFn = case resTy of
                 RTSuccess -> ok
                 RTIgnore -> warn
-                RTFail -> fail
+                RTFail -> failure
           case resTy of
             RTSuccess -> printFn "OK"
             RTIgnore -> printFn "DISABLED"
@@ -621,7 +626,7 @@ printStatistics st time = do
       ok $ printf "All %d tests passed (%.2fs)\n" total time
 
     fs -> do
-      fail $ printf "%d out of %d tests failed (%.2fs)\n" fs total time
+      failure $ printf "%d out of %d tests failed (%.2fs)\n" fs total time
 
 data FailureStatus
   = Unknown
@@ -804,10 +809,10 @@ computeAlignment opts =
         Maximum x -> x
 
 -- (Potentially) colorful output
-ok, warn, fail, infoOk, infoWarn, infoFail :: (?colors :: Bool) => String -> IO ()
+ok, warn, failure, infoOk, infoWarn, infoFail :: (?colors :: Bool) => String -> IO ()
 ok       = output NormalIntensity Dull  Green
 warn     = output NormalIntensity Dull  Yellow
-fail     = output BoldIntensity   Vivid Red
+failure   = output BoldIntensity   Vivid Red
 infoOk   = output NormalIntensity Dull  White
 infoWarn = output NormalIntensity Dull  White
 infoFail = output NormalIntensity Dull  Red
