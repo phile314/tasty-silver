@@ -75,9 +75,9 @@ testShowDiff =
                         writeFile actualFile actualValue
       writeFile goldenFile goldenValue
       writeFile actualFile actualValue
-      case tryIngredients [consoleTestReporter] mempty tree of
-        Nothing -> assertFailure "Testbroken"  -- should be impossible
-        Just io -> do
+      do
+          let io = defaultMain tree
+          -- let io = runTestsInteractive (const False) mempty tree
           (out, success) <- capture $ catch (True <$ io) $ \ (e :: IOException) -> do
              print e
              return False
