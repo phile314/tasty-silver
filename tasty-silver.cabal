@@ -69,7 +69,11 @@ library
       -- regex-tdfa has this lower bound on base, so we make it explicit here
     bytestring >= 0.9.2.1,
     containers,
-    directory,
+    directory >= 1.2.2,
+      -- Andreas Abel, 2021-09-06, with 1.2.1.0 (GHC 7.8) it finds
+      -- /usr/bin/git over the git in the PATH, crashing on macOS due to
+      -- the system integrity restrictions:
+      -- /usr/bin/git: fileAccess: permission denied (Operation not permitted)
     deepseq,
     filepath,
     mtl,

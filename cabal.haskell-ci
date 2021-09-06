@@ -1,1 +1,1 @@
-installed: +all -bytestring -process
+installed: +all -bytestring -directory -process
