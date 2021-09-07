@@ -287,25 +287,33 @@ showInLess _ t = do
       TIO.putStrLn t
   where inp = encodeUtf8 t
 
-tryAccept :: String -> TestName -> (a -> IO ()) -> a -> IO Bool
-tryAccept pref nm upd new = do
+
+-- | Ask user whether to accept a new golden value, and run action if yes.
+
+tryAccept
+  :: String   -- ^ @prefix@ printed at the beginning of each line.
+  -> IO ()    -- ^ Action to @update@ golden value.
+  -> IO Bool  -- ^ Return decision whether to update the golden value.
+tryAccept prefix update = do
   isTerm <- hSupportsANSI stdout
   when isTerm showCursor
-  _ <- printf "%sAccept actual value as new golden value? [yn] " pref
-  ans <- getLine
-  case ans of
-    "y" -> do
-        upd new
-        when isTerm hideCursor
-        printf "%s" pref
-        return True
-    "n" -> do
-        printf "%s" pref
-        when isTerm hideCursor
-        return False
-    _   -> do
-        printf "%sInvalid answer.\n" pref
-        tryAccept pref nm upd new
+  putStr prefix
+  putStr "Accept actual value as new golden value? [yn] "
+  let
+    done b = do
+      when isTerm hideCursor
+      putStr prefix
+      return b
+    loop = do
+      ans <- getLine
+      case ans of
+        "y" -> do update; done True
+        "n" -> done False
+        _   -> do
+          putStr prefix
+          putStrLn "Invalid answer."
+          loop
+  loop
 
 
 --------------------------------------------------
@@ -403,7 +411,7 @@ produceOutput opts tree =
                   let a' = runIdentity a
                   shw' <- shw a'
                   showValue name shw'
-                  isUpd <- tryAccept pref name upd a'
+                  isUpd <- tryAccept pref $ upd a'
                   let r =
                         if isUpd
                         then ( testPassed "Created golden value."
@@ -415,7 +423,7 @@ produceOutput opts tree =
                 Just (Mismatch (GRDifferent _ a diff (Just upd))) -> do
                   printf "Golden value differs from actual value.\n"
                   showDiff name diff
-                  isUpd <- tryAccept pref name upd a
+                  isUpd <- tryAccept pref $ upd a
                   let r =
                         if isUpd
                         then ( testPassed "Updated golden value."
