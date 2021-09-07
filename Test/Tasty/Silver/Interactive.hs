@@ -225,18 +225,31 @@ showDiff n (DiffText _ tGold tAct) = do
     hasWDiff <- doesCmdExist "wdiff"
     if hasWDiff then doesCmdExist "colordiff" else return False
 
-  withDiffEnv n tGold tAct $
-    if hasColorDiff then colorDiff else gitDiff
-
-  where
-    gitDiff   fGold fAct = callProcess "sh"
-      [ "-c", unwords ["git diff --color=always --no-index --text", fGold, fAct, "| less -r > /dev/tty"] ]
-    colorDiff fGold fAct = callProcess "sh"
-      [ "-c", unwords ["wdiff", fGold, fAct, "| colordiff | less -r > /dev/tty"] ]
+  withDiffEnv n tGold tAct $ \ fGold fAct ->
+    callProcess "sh"
+      [ "-c"
+      , unwords
+        [ if hasColorDiff then "wdiff" else "git diff --color=always --no-index --text"
+        , shellEscape fGold
+        , shellEscape fAct
+        , if hasColorDiff then "| colordiff" else ""
+        , "| less -r > /dev/tty"
+          -- Option -r: display control characters raw (e.g. sound bell instead of printing ^G)
+          -- /dev/tty is "terminal where process started"  ("CON" on Windows?)
+        ]
+      ]
 
 showDiff n (ShowDiffed _ t) = showInLess n t
 showDiff _ Equal = error "Can't show diff for equal values."
 
+-- Hacky shell escape approach to fix calling sh on windows ...
+-- | Escape backslashes, double-quotes, and whitespace
+shellEscape :: String -> String
+shellEscape = concatMap $ \ c -> case c of
+  '\\' -> "\\\\"
+  ' '  -> "\\ "
+  '"'  -> "\\\""
+  c    -> [c]
 
 doesCmdExist :: String -> IO Bool
 doesCmdExist cmd = isJust <$> findExecutable cmd
