@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Concurrent.MVar
@@ -6,6 +7,7 @@ import Control.Exception as E ( catch, IOException, SomeException )
   -- Prelude of GHC 7.4 also has @catch@, so we disambiguate with E.catch
 import Control.Monad          ( unless )
 import Control.Monad.IO.Class ( liftIO )
+
 import Data.List (sort)
 #if !(MIN_VERSION_base(4,8,0))
 import Data.Functor           ( (<$) )
@@ -36,6 +38,7 @@ main = defaultMain $ testGroup "tests" $
   testFindByExt :
   testWithResource :
   testCheckRF :
+  testGolden :
   []
 
 testFindByExt :: TestTree
@@ -85,6 +88,16 @@ testShowDiff =
           -- unless success $ putStr out
           putStr out
           assertBool "Test should succeed." success
+
+testGolden :: TestTree
+testGolden =
+  goldenTest1
+    "wrongOutput"
+    (return $ Just "golden value")
+    (return "actual value")
+    (DiffText Nothing)   -- always fail
+    ShowText
+    (const $ return ())  -- keep the golden file no matter what
 
 -- | Check if resources are properly initialized.
 testWithResource :: TestTree
