@@ -169,18 +169,15 @@ findByExtension
   :: [FilePath] -- ^ extensions
   -> FilePath -- ^ directory
   -> IO [FilePath] -- ^ paths
-findByExtension extsList = go where
+findByExtension extsList = go
+  where
   exts = Set.fromList extsList
   go dir = do
     allEntries <- getDirectoryContents dir
     let entries = filter (not . (`elem` [".", ".."])) allEntries
     liftM concat $ forM entries $ \e -> do
-      let path = dir ++ "/" ++ e
+      let path = dir ++ "/" ++ e         -- NOT </>! Slash accepted even on Windows.
       isDir <- doesDirectoryExist path
       if isDir
         then go path
-        else
-          return $
-            if takeExtension path `Set.member` exts
-              then [path]
-              else []
+        else return [ path | takeExtension path `Set.member` exts ]
