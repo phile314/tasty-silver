@@ -80,23 +80,28 @@ type DisabledTests = TestPath -> Bool
 
 -- | Like @defaultMain@ from the main tasty package, but also includes the
 -- golden test management capabilities.
+
 defaultMain :: TestTree -> IO ()
 defaultMain = defaultMain1 []
 
 
-defaultMain1 :: ([RegexFilter]) -> TestTree -> IO ()
-defaultMain1 filters = defaultMainWithIngredients
+defaultMain1 :: [RegexFilter] -> TestTree -> IO ()
+defaultMain1 filters =
+    defaultMainWithIngredients
         [ listingTests
         , interactiveTests (checkRF False filters)
         ]
 
+-- | Option for interactive mode.
+
 newtype Interactive = Interactive Bool
   deriving (Eq, Ord, Typeable)
+
 instance IsOption Interactive where
-  defaultValue = Interactive False
-  parseValue = fmap Interactive . safeRead
-  optionName = return "interactive"
-  optionHelp = return "Run tests in interactive mode."
+  defaultValue   = Interactive False
+  parseValue     = fmap Interactive . safeRead
+  optionName     = return "interactive"
+  optionHelp     = return "Run tests in interactive mode."
   optionCLParser = flagCLParser (Just 'i') (Interactive True)
 
 data ResultType = RTSuccess | RTFail | RTIgnore
