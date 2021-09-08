@@ -24,6 +24,7 @@ module Test.Tasty.Silver.Interactive
 
   -- * Programmatic API
   , runTestsInteractive
+  , DisabledTests
   )
   where
 
@@ -38,15 +39,16 @@ import Control.Monad.State
 
 import Data.Char
 import Data.Maybe
-import Data.Monoid ( Any(..) )
+import Data.Monoid    ( Any(..) )
 #if !(MIN_VERSION_base(4,8,0))
-import Data.Monoid ( Monoid(..) )
+import Data.Monoid    ( Monoid(..) )
 #endif
 import Data.Proxy
 #if !(MIN_VERSION_base(4,11,0))
-import Data.Semigroup (Semigroup(..))
+import Data.Semigroup ( Semigroup(..) )
 #endif
 import Data.Tagged
+import Data.Text      ( Text )
 import Data.Text.Encoding
 import Data.Typeable
 import qualified Data.ByteString as BS
@@ -194,58 +196,118 @@ runTestsInteractive dis opts tests = do
             return $ statFailures stats == 0
 
 
+-- | Show diff using available external tools.
+
 printDiff :: TestName -> GDiff -> IO ()
-printDiff n (DiffText _ tGold tAct) = do
-  hasGit <- doesCmdExist "git"
-  if hasGit then
+printDiff = showDiff_ False
+
+-- | Like 'printDiff', but uses @less@ if available.
+
+showDiff :: TestName -> GDiff -> IO ()
+showDiff n d = do
+  useLess <- haveSh `and2M` useLess
+  showDiff_ useLess n d
+
+showDiff_ :: Bool -> TestName -> GDiff -> IO ()
+showDiff_ _       _ Equal                   = error "Can't show diff for equal values."
+showDiff_ True    n (ShowDiffed _ t)        = showInLess n t
+showDiff_ False   _ (ShowDiffed _ t)        = TIO.putStrLn t
+showDiff_ useLess n (DiffText _ tGold tAct) =
+  ifM (doesCmdExist "wdiff" `and2M` doesCmdExist "colordiff") colorDiff $ {-else-}
+  ifM (doesCmdExist "git") gitDiff {-else-} noDiff
+  where
+
+  -- Display diff using `git diff`.
+  gitDiff = do
     withDiffEnv n tGold tAct $ \ fGold fAct -> do
-      ret@(exitcode, stdOut, stdErr) <-
-        ProcessText.readProcessWithExitCode
-          "git" [ "diff", "--no-index", "--text", "--exit-code", fGold, fAct ]
-          -- "sh" [ "-c", unwords ["git diff --no-index --text --exit-code", fGold, fAct] ]
-          T.empty
-      if T.null stdErr then
-        case exitcode of
-          ExitSuccess   -> TIO.putStrLn stdOut
-          ExitFailure 1 -> TIO.putStrLn stdOut
-          ExitFailure _ -> gitFailed $ show ret
-      else gitFailed $ T.unpack stdErr
-  else do
+      -- Unless we use `less` and have `sh`, we simply call `git` directly.
+      ifNotM (pure useLess `and2M` haveSh)
+        {-then-} (TIO.putStrLn =<< callGitDiff [ fGold, fAct ])
+        {-else-} $ do
+        -- `sh` can do the piping for us.
+        callProcess "sh"
+          [ "-c"
+          , unwords
+            [ "git"
+            , unwords gitDiffArgs
+            , "--color=always"
+            , toSlashesFilename fGold
+            , toSlashesFilename fAct
+            , "| less -r > /dev/tty"
+              -- Option -r: display control characters raw (e.g. sound bell instead of printing ^G).
+              -- Thus, ANSI escape sequences will be interpreted as that.
+              -- /dev/tty is "terminal where process started"  ("CON" on Windows?)
+            ]
+          ]
+
+  -- Display diff using `wdiff | colordiff`.
+  colorDiff = do
+    withDiffEnv n tGold tAct $ \ fGold fAct -> do
+      haveSh <- haveSh
+      if haveSh then do
+        -- `sh` can do the piping for us.
+        callProcess "sh"
+          [ "-c"
+          , unwords
+            [ "wdiff"
+            , toSlashesFilename fGold
+            , toSlashesFilename fAct
+            , "| colordiff"
+            , if useLess then "| less -r > /dev/tty" else ""
+              -- Option -r: display control characters raw (e.g. sound bell instead of printing ^G).
+              -- Thus, ANSI escape sequences will be interpreted as that.
+              -- /dev/tty is "terminal where process started"  ("CON" on Windows?)
+            ]
+          ]
+      else do
+        -- We have to pipe ourselves; don't use `less` then.
+        callProcessText "wdiff" [fGold, fAct] T.empty >>=
+          void . callProcessText "colordiff" []
+    -- Newline if we didn't go through less
+    unless useLess $ putStrLn ""
+
+  -- No diff tool: Simply print both golden and actual value.
+  noDiff = do
     putStrLn "`git diff` not available, cannot produce a diff."
     putStrLn "Golden value:"
     TIO.putStrLn tGold
     putStrLn "Actual value:"
     TIO.putStrLn tAct
+
+
+-- | Call external process, feeding given @stdin@ and returning produced @stdout@.
+--   Throw exception if @stderr@ is not empty or exit-code is non-zero.
+
+callProcessText :: FilePath -> [String] -> Text -> IO Text
+callProcessText cmd args stdIn = do
+  ret@(exitcode, stdOut, stdErr) <- ProcessText.readProcessWithExitCode cmd args stdIn
+  if exitcode == ExitSuccess && T.null stdErr
+    then return stdOut
+    else fail $ unwords [ "Call to", cmd, "failed:", show ret ]
+
+-- | Call external tool @"git" 'gitDiffArgs'@ with given extra arguments, returning its output.
+--   If @git diff@ prints to @stderr@ or returns a exitcode indicating failure, throw exception.
+
+callGitDiff
+  :: [String]  -- ^ File arguments to @git diff@.
+  -> IO Text   -- ^ @stdout@ produced by the call.
+callGitDiff args = do
+  ret@(exitcode, stdOut, stdErr) <-
+    ProcessText.readProcessWithExitCode
+      "git" (gitDiffArgs ++ args) T.empty
+  if T.null stdErr then
+    case exitcode of
+      ExitSuccess   -> return stdOut
+      -- With option --no-index, exitcode 1 indicates that files are different.
+      ExitFailure 1 -> return stdOut
+      -- Other failure codes indicate that something went wrong.
+      ExitFailure _ -> gitFailed $ show ret
+  else gitFailed $ T.unpack stdErr
   where
   gitFailed msg = fail $ "Call to `git diff` failed: " ++ msg
-printDiff _ (ShowDiffed _ t) = TIO.putStrLn t
-printDiff _ Equal = error "Can't print diff for equal values."
 
-
-showDiff :: TestName -> GDiff -> IO ()
-showDiff n (DiffText _ tGold tAct) = do
-
-  -- hasColorDiff if both wdiff and colordiff exist
-  hasColorDiff <- do
-    hasWDiff <- doesCmdExist "wdiff"
-    if hasWDiff then doesCmdExist "colordiff" else return False
-
-  withDiffEnv n tGold tAct $ \ fGold fAct ->
-    callProcess "sh"
-      [ "-c"
-      , unwords
-        [ if hasColorDiff then "wdiff" else "git diff --color=always --no-index --text"
-        , toSlashesFilename fGold
-        , toSlashesFilename fAct
-        , if hasColorDiff then "| colordiff" else ""
-        , "| less -r > /dev/tty"
-          -- Option -r: display control characters raw (e.g. sound bell instead of printing ^G)
-          -- /dev/tty is "terminal where process started"  ("CON" on Windows?)
-        ]
-      ]
-
-showDiff n (ShowDiffed _ t) = showInLess n t
-showDiff _ Equal = error "Can't show diff for equal values."
+gitDiffArgs :: [String]
+gitDiffArgs = [ "diff", "--no-index", "--text" ]
 
 -- #16: filenames get mangled under Windows, backslashes disappearing.
 -- We only use this function on names of tempfiles, which do not contain spaces,
@@ -281,44 +343,57 @@ showValue n (ShowText t) = showInLess n t
 
 showInLess :: String -> T.Text -> IO ()
 showInLess _ t = do
-  isTerm <- hSupportsANSI stdout
-  if isTerm
-    then do
-      ret <- PS.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] inp
+  ifNotM (haveSh `and2M` useLess)
+    {-then-} (TIO.putStrLn t)
+    {-else-} $ do
+      ret <- PS.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] $ encodeUtf8 t
       case ret of
         ret@(ExitFailure _, _, _) -> error $ show ret
         _ -> return ()
-    else
-      TIO.putStrLn t
-  where inp = encodeUtf8 t
+
+-- | Should we use external tool @less@ to display diffs and results?
+useLess :: IO Bool
+useLess = andM [ hIsTerminalDevice stdin, hSupportsANSI stdout, doesCmdExist "less" ]
+
+-- | Is @sh@ available to take care of piping for us?
+haveSh :: IO Bool
+haveSh = doesCmdExist "sh"
 
 
 -- | Ask user whether to accept a new golden value, and run action if yes.
+--   If terminal is non-interactive, just assume "yes" always.
 
 tryAccept
   :: String   -- ^ @prefix@ printed at the beginning of each line.
   -> IO ()    -- ^ Action to @update@ golden value.
   -> IO Bool  -- ^ Return decision whether to update the golden value.
 tryAccept prefix update = do
-  isANSI <- hSupportsANSI stdout
-  when isANSI showCursor
-  putStr prefix
-  putStr "Accept actual value as new golden value? [yn] "
-  let
-    done b = do
-      when isANSI hideCursor
-      putStr prefix
-      return b
-    loop = do
-      ans <- getLine
-      case ans of
-        "y" -> do update; done True
-        "n" -> done False
-        _   -> do
-          putStr prefix
-          putStrLn "Invalid answer."
-          loop
-  loop
+  termIsInteractive <- hIsTerminalDevice stdin
+  if not termIsInteractive then do
+    putStr prefix
+    putStr "Accepting actual value as new golden value."
+    update
+    return True
+  else do
+    isANSI <- hSupportsANSI stdout
+    when isANSI showCursor
+    putStr prefix
+    putStr "Accept actual value as new golden value? [yn] "
+    let
+      done b = do
+        when isANSI hideCursor
+        putStr prefix
+        return b
+      loop = do
+        ans <- getLine
+        case ans of
+          "y" -> do update; done True
+          "n" -> done False
+          _   -> do
+            putStr prefix
+            putStrLn "Invalid answer."
+            loop
+    loop
 
 
 --------------------------------------------------
