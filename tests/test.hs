@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Concurrent.MVar
-import Control.Exception as E ( catch, IOException, SomeException )
+import Control.Exception as E ( catch, SomeException )
   -- Prelude of GHC 7.4 also has @catch@, so we disambiguate with E.catch
 import Control.Monad          ( unless )
 import Control.Monad.IO.Class ( liftIO )

@@ -130,3 +130,28 @@ instance Show (GoldenResult' m) where
   show GREqual = "GREqual"
   show (GRDifferent {}) = "GRDifferent"
   show (GRNoGolden {}) = "GRNoGolden"
+
+
+-- * Generic utilites
+
+-- | Monadic @if@.
+
+ifM :: Monad m => m Bool -> m a -> m a -> m a
+ifM mc mt me = do
+  c <- mc
+  if c then mt else me
+
+-- | Monadic @if (not ...) ...@.
+
+ifNotM :: Monad m => m Bool -> m a -> m a -> m a
+ifNotM mc = flip $ ifM mc
+
+-- | Short-cutting version of @'liftM2' (&&)@.
+
+and2M :: Monad m => m Bool -> m Bool -> m Bool
+and2M ma mb = ifM ma mb $ return False
+
+-- | Short-cutting version of @'and' . 'sequence'@.
+
+andM :: Monad m => [m Bool] -> m Bool
+andM = Prelude.foldl and2M (return True)
