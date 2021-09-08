@@ -300,13 +300,13 @@ tryAccept
   -> IO ()    -- ^ Action to @update@ golden value.
   -> IO Bool  -- ^ Return decision whether to update the golden value.
 tryAccept prefix update = do
-  isTerm <- hSupportsANSI stdout
-  when isTerm showCursor
+  isANSI <- hSupportsANSI stdout
+  when isANSI showCursor
   putStr prefix
   putStr "Accept actual value as new golden value? [yn] "
   let
     done b = do
-      when isTerm hideCursor
+      when isANSI hideCursor
       putStr prefix
       return b
     loop = do
@@ -678,11 +678,12 @@ instance Monoid FailureStatus where
 -- | Report only failed tests
 newtype HideSuccesses = HideSuccesses Bool
   deriving (Eq, Ord, Typeable)
+
 instance IsOption HideSuccesses where
-  defaultValue = HideSuccesses False
-  parseValue = fmap HideSuccesses . safeRead
-  optionName = return "hide-successes"
-  optionHelp = return "Do not print tests that passed successfully"
+  defaultValue   = HideSuccesses False
+  parseValue     = fmap HideSuccesses . safeRead
+  optionName     = return "hide-successes"
+  optionHelp     = return "Do not print tests that passed successfully"
   optionCLParser = flagCLParser Nothing (HideSuccesses True)
 
 newtype AnsiTricks = AnsiTricks Bool
@@ -690,9 +691,9 @@ newtype AnsiTricks = AnsiTricks Bool
 
 instance IsOption AnsiTricks where
   defaultValue = AnsiTricks True
-  parseValue = fmap AnsiTricks . safeReadBool
-  optionName = return "ansi-tricks"
-  optionHelp = return $
+  parseValue   = fmap AnsiTricks . safeReadBool
+  optionName   = return "ansi-tricks"
+  optionHelp   = return $
     -- Multiline literals don't work because of -XCPP.
     "Enable various ANSI terminal tricks. " ++
     "Can be set to 'true' (default) or 'false'."
@@ -704,10 +705,10 @@ data UseColor
 
 -- | Control color output
 instance IsOption UseColor where
-  defaultValue = Auto
-  parseValue = parseUseColor
-  optionName = return "color"
-  optionHelp = return "When to use colored output. Options are 'never', 'always' and 'auto' (default: 'auto')"
+  defaultValue   = Auto
+  parseValue     = parseUseColor
+  optionName     = return "color"
+  optionHelp     = return "When to use colored output. Options are 'never', 'always' and 'auto' (default: 'auto')"
   optionCLParser =
     option parse
       (  long name
