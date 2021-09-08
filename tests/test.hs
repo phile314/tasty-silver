@@ -12,7 +12,7 @@ import Data.Functor           ( (<$) )
 import Data.Monoid            ( mempty )
 #endif
 
-import System.Directory
+import System.Directory       ( createDirectory, withCurrentDirectory )
 import System.FilePath
 import System.IO.Silently     ( capture )
 import System.IO.Temp
@@ -42,8 +42,8 @@ testFindByExt :: TestTree
 testFindByExt =
   testCase "findByExtension" $
     withSystemTempDirectory "golden-test" $ \basedir -> do
-
-      setCurrentDirectory basedir
+     withCurrentDirectory basedir $ do
+      -- Andreas 2021-09-07: setCurrentDirectory would affect other tests!
 
       createDirectory ("d1")
       createDirectory ("d1" </> "d2")
