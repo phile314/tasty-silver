@@ -235,8 +235,8 @@ showDiff n (DiffText _ tGold tAct) = do
       [ "-c"
       , unwords
         [ if hasColorDiff then "wdiff" else "git diff --color=always --no-index --text"
-        , shellEscape fGold
-        , shellEscape fAct
+        , toSlashesFilename fGold
+        , toSlashesFilename fAct
         , if hasColorDiff then "| colordiff" else ""
         , "| less -r > /dev/tty"
           -- Option -r: display control characters raw (e.g. sound bell instead of printing ^G)
@@ -247,14 +247,14 @@ showDiff n (DiffText _ tGold tAct) = do
 showDiff n (ShowDiffed _ t) = showInLess n t
 showDiff _ Equal = error "Can't show diff for equal values."
 
--- Hacky shell escape approach to fix calling sh on windows ...
--- | Escape backslashes, double-quotes, and whitespace
-shellEscape :: String -> String
-shellEscape = concatMap $ \ c -> case c of
-  '\\' -> "\\\\"
-  ' '  -> "\\ "
-  '"'  -> "\\\""
-  c    -> [c]
+-- #16: filenames get mangled under Windows, backslashes disappearing.
+-- We only use this function on names of tempfiles, which do not contain spaces,
+-- so it should be enough to hackily replace backslashes by slashes.
+-- | Turn backslashes to slashes, which can also be path separators on Windows.
+toSlashesFilename :: String -> String
+toSlashesFilename = map $ \ c -> case c of
+  '\\' -> '/'
+  c    -> c
 
 doesCmdExist :: String -> IO Bool
 doesCmdExist cmd = isJust <$> findExecutable cmd
