@@ -155,3 +155,13 @@ and2M ma mb = ifM ma mb $ return False
 
 andM :: Monad m => [m Bool] -> m Bool
 andM = Prelude.foldl and2M (return True)
+
+-- | Short-cutting version of @'liftM2' (||)@.
+
+or2M :: Monad m => m Bool -> m Bool -> m Bool
+or2M ma mb = ifM ma (return True) mb
+
+-- | Short-cutting version of @'or' . 'sequence'@.
+
+orM :: Monad m => [m Bool] -> m Bool
+orM = Prelude.foldl or2M (return False)
