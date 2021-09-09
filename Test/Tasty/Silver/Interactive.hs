@@ -205,7 +205,7 @@ printDiff = showDiff_ False
 
 showDiff :: TestName -> GDiff -> IO ()
 showDiff n d = do
-  useLess <- haveSh `and2M` useLess
+  useLess <- useLess
   showDiff_ useLess n d
 
 showDiff_ :: Bool -> TestName -> GDiff -> IO ()
@@ -213,21 +213,17 @@ showDiff_ _       _ Equal                   = error "Can't show diff for equal v
 showDiff_ True    n (ShowDiffed _ t)        = showInLess n t
 showDiff_ False   _ (ShowDiffed _ t)        = TIO.putStrLn t
 showDiff_ useLess n (DiffText _ tGold tAct) =
-  ifM (doesCmdExist "wdiff" `and2M` doesCmdExist "colordiff") colorDiff $ {-else-}
+  ifM (doesCmdExist "wdiff" `and2M` haveColorDiff) colorDiff $ {-else-}
   ifM (doesCmdExist "git") gitDiff {-else-} noDiff
   where
 
   -- Display diff using `git diff`.
   gitDiff = do
     withDiffEnv n tGold tAct $ \ fGold fAct -> do
-      -- Unless we use `less` and have `sh`, we simply call `git` directly.
-      ifNotM (pure useLess `and2M` haveSh)
-        {-then-} (TIO.putStrLn =<< callGitDiff [ fGold, fAct ])
-        {-else-} $ do
-        -- `sh` can do the piping for us.
-        callProcess "sh"
-          [ "-c"
-          , unwords
+      -- Unless we use `less`, we simply call `git` directly.
+      if not useLess
+        then TIO.putStrLn =<< callGitDiff [ fGold, fAct ]
+        else callCommand $ unwords
             [ "git"
             , unwords gitDiffArgs
             , "--color=always"
@@ -238,31 +234,28 @@ showDiff_ useLess n (DiffText _ tGold tAct) =
               -- Thus, ANSI escape sequences will be interpreted as that.
               -- /dev/tty is "terminal where process started"  ("CON" on Windows?)
             ]
-          ]
 
   -- Display diff using `wdiff | colordiff`.
   colorDiff = do
     withDiffEnv n tGold tAct $ \ fGold fAct -> do
-      haveSh <- haveSh
-      if haveSh then do
-        -- `sh` can do the piping for us.
-        callProcess "sh"
-          [ "-c"
-          , unwords
+        -- The shell can do the piping for us.
+        callCommand $ unwords
             [ "wdiff"
             , toSlashesFilename fGold
             , toSlashesFilename fAct
             , "| colordiff"
+              -- E.g.
             , if useLess then "| less -r > /dev/tty" else ""
               -- Option -r: display control characters raw (e.g. sound bell instead of printing ^G).
               -- Thus, ANSI escape sequences will be interpreted as that.
               -- /dev/tty is "terminal where process started"  ("CON" on Windows?)
             ]
-          ]
-      else do
-        -- We have to pipe ourselves; don't use `less` then.
-        callProcessText "wdiff" [fGold, fAct] T.empty >>=
-          void . callProcessText "colordiff" []
+      -- Alt:
+      --   -- We have to pipe ourselves; don't use `less` then.
+      --   callProcessText "wdiff" [fGold, fAct] T.empty >>=
+      --     void . callProcessText "colordiff" []
+      --   -- TODO: invoke "colordiff" through callCommand
+
     -- Newline if we didn't go through less
     unless useLess $ putStrLn ""
 
@@ -318,8 +311,32 @@ toSlashesFilename = map $ \ c -> case c of
   '\\' -> '/'
   c    -> c
 
+-- | Look for a command on the PATH.  If @doesCmdExist cmd@, then
+--   @callProcess cmd@ should be possible.
+--
+--   Note that there are OS-specific differences.
+--   E.g. on @cygwin@, only binaries (@.exe@) are deemed to exist,
+--   not scripts.  The latter also cannot be called directly with
+--   @callProcess@, but need indirection via @sh -c@.
+--   In particular, @colordiff@, which is a @perl@ script, is not
+--   found by @doesCmdExist@ on @cygwin@.
+--
+--   On @macOS@, there isn't such a distinction, so @colordiff@
+--   is both found by @doesCmdExist@ and can be run by @callProcess@.
 doesCmdExist :: String -> IO Bool
 doesCmdExist cmd = isJust <$> findExecutable cmd
+
+-- | Since @colordiff@ is a script, it is not found by 'findExecutable'
+-- e.g. on Cygwin.  So we try also to find it using @which@.
+haveColorDiff :: IO Bool
+haveColorDiff = orM
+  [ doesCmdExist "colordiff"
+  , exitCodeToBool <$> rawSystem "which" [ "colordiff" ]
+  ]
+
+exitCodeToBool :: ExitCode -> Bool
+exitCodeToBool ExitSuccess   = True
+exitCodeToBool ExitFailure{} = False
 
 -- Stores the golden/actual text in two files, so we can use it for git diff.
 withDiffEnv :: TestName -> T.Text -> T.Text -> (FilePath -> FilePath -> IO ()) -> IO ()
@@ -343,10 +360,10 @@ showValue n (ShowText t) = showInLess n t
 
 showInLess :: String -> T.Text -> IO ()
 showInLess _ t = do
-  ifNotM (haveSh `and2M` useLess)
+  ifNotM useLess
     {-then-} (TIO.putStrLn t)
     {-else-} $ do
-      ret <- PS.readProcessWithExitCode "sh" ["-c", "less > /dev/tty"] $ encodeUtf8 t
+      ret <- PS.readCreateProcessWithExitCode (shell "less > /dev/tty") $ encodeUtf8 t
       case ret of
         ret@(ExitFailure _, _, _) -> error $ show ret
         _ -> return ()
@@ -354,11 +371,6 @@ showInLess _ t = do
 -- | Should we use external tool @less@ to display diffs and results?
 useLess :: IO Bool
 useLess = andM [ hIsTerminalDevice stdin, hSupportsANSI stdout, doesCmdExist "less" ]
-
--- | Is @sh@ available to take care of piping for us?
-haveSh :: IO Bool
-haveSh = doesCmdExist "sh"
-
 
 -- | Ask user whether to accept a new golden value, and run action if yes.
 --   If terminal is non-interactive, just assume "yes" always.
