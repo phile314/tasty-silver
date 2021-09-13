@@ -63,6 +63,7 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.IO
+import System.IO.Silently (silence)
 import System.IO.Temp
 import System.Process
 import System.Process.ByteString as PS
@@ -238,8 +239,7 @@ showDiff_ useLess n (DiffText _ tGold tAct) =
   -- Display diff using `wdiff | colordiff`.
   colorDiff = do
     withDiffEnv n tGold tAct $ \ fGold fAct -> do
-        -- The shell can do the piping for us.
-        callCommand $ unwords
+      let cmd = unwords
             [ "wdiff"
             , toSlashesFilename fGold
             , toSlashesFilename fAct
@@ -247,9 +247,16 @@ showDiff_ useLess n (DiffText _ tGold tAct) =
               -- E.g.
             , if useLess then "| less -r > /dev/tty" else ""
               -- Option -r: display control characters raw (e.g. sound bell instead of printing ^G).
-              -- Thus, ANSI escape sequences will be interpreted as that.
+              -- Thus, ANSI escape sequences will be interpreted, e.g. as coloring.
               -- /dev/tty is "terminal where process started"  ("CON" on Windows?)
             ]
+      ifM (doesCmdExist "colordiff")
+        -- If `colordiff` is treated as executable binary, we do not indirect via `sh`,
+        -- but can let the default shell do the piping for us.
+        {-then-} (callCommand cmd)
+        -- Otherwise, let `sh` do the piping for us.  (Needed e.g. for Cygwin.)
+        {-else-} (callProcess "sh" [ "-c", cmd ])
+
       -- Alt:
       --   -- We have to pipe ourselves; don't use `less` then.
       --   callProcessText "wdiff" [fGold, fAct] T.empty >>=
@@ -326,12 +333,15 @@ toSlashesFilename = map $ \ c -> case c of
 doesCmdExist :: String -> IO Bool
 doesCmdExist cmd = isJust <$> findExecutable cmd
 
--- | Since @colordiff@ is a script, it is not found by 'findExecutable'
+-- | Since @colordiff@ is a script, it may not be found by 'findExecutable'
 -- e.g. on Cygwin.  So we try also to find it using @which@.
 haveColorDiff :: IO Bool
 haveColorDiff = orM
   [ doesCmdExist "colordiff"
-  , exitCodeToBool <$> rawSystem "which" [ "colordiff" ]
+  , andM
+    [ haveSh
+    , silence $ exitCodeToBool <$> rawSystem "which" [ "colordiff" ]
+    ]
   ]
 
 exitCodeToBool :: ExitCode -> Bool
@@ -371,6 +381,10 @@ showInLess _ t = do
 -- | Should we use external tool @less@ to display diffs and results?
 useLess :: IO Bool
 useLess = andM [ hIsTerminalDevice stdin, hSupportsANSI stdout, doesCmdExist "less" ]
+
+-- | Is @sh@ available to take care of piping for us?
+haveSh :: IO Bool
+haveSh = doesCmdExist "sh"
 
 -- | Ask user whether to accept a new golden value, and run action if yes.
 --   If terminal is non-interactive, just assume "yes" always.
