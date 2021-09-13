@@ -1,13 +1,14 @@
 Changes
 =======
 
-Version 3.2.3 (unreleased)
----------------
+Version 3.2.3 (13 Sep 2021)
+-------------
 
 * Tested with GHC 7.4 - 9.0 (fixed compilation with GHC 7.4 - 7.8)
+* CI via GitHub Actions on platforms `ubuntu`, `macOS`, `windows`.
 
 Version 3.2.2
----------------
+-------------
 
 * Fix cabal warning (#27, thanks to felixonmars)
 
