@@ -23,6 +23,29 @@ to the user. Based upon this diff, the user can choose to update the golden stan
 fix the test case as necessary. Interactive mode requires that at least `git diff` and `less` is
 available, or preferrably `wdiff` and `colordiff` for character-based diffs.
 
+If `-i` is supplied but no user input can be received (`hIsTerminalDevice stdin` gives `False`),
+then answer "yes" is assumed on questions whether to update the golden value.
+(So, with `-i < /dev/null` one can update all golden values.)
+
+Portability
+-----------
+
+`tasty-silver` aims to work under Linux, macOS, and Windows.  In
+particular, it should work in the [GitHub CI virtual
+environments](https://github.com/actions/virtual-environments).
+
+Known limitations:
+
+- On `macOS`, GHC ≥ 7.10 is required, as GHC ≤ 7.8 produces code that
+  is not compatible with the System Integrity Protection mechanism of
+  Mac OS X.  In particular, you could see errors like:
+  ```
+  /usr/bin/less: getPermissions:fileAccess: permission denied (Operation not permitted)
+  ```
+
+- On Windows, the colored diff may not be available as it depends on
+  the availability of `colordiff`, `less`, `sh`, and `wdiff`.
+
 Examples
 --------
 
