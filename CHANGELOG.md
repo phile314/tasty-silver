@@ -8,9 +8,6 @@ Version 3.3 (unreleased)
   - Calls to `git diff` are no longer indirected via `sh -c`.
   - When indirection via `sh -c` is used, backslashes in filenames are converted to slashes.
 
-* Interactive (`-i`): If `stdin` is redirected (`hIsTerminalDevice stdin` gives `False`),
-  answer "yes" is assumed, so golden values are updated.
-
 Version 3.2.3 (13 Sep 2021)
 -------------
 

@@ -23,10 +23,6 @@ to the user. Based upon this diff, the user can choose to update the golden stan
 fix the test case as necessary. Interactive mode requires that at least `git diff` and `less` is
 available, or preferrably `wdiff` and `colordiff` for character-based diffs.
 
-If `-i` is supplied but no user input can be received (`hIsTerminalDevice stdin` gives `False`),
-then answer "yes" is assumed on questions whether to update the golden value.
-(So, with `-i < /dev/null` one can update all golden values.)
-
 Portability
 -----------
 

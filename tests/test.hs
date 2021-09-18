@@ -38,7 +38,9 @@ main = defaultMain $ testGroup "tests" $
   testFindByExt :
   testWithResource :
   testCheckRF :
-  testGolden :
+  -- Andreas, 2021-09-18
+  -- @testGolden@ always fails, would need @--accept@ mode.
+  -- testGolden :
   []
 
 testFindByExt :: TestTree
@@ -89,15 +91,16 @@ testShowDiff =
           putStr out
           assertBool "Test should succeed." success
 
-testGolden :: TestTree
-testGolden =
-  goldenTest1
-    "wrongOutput"
-    (return $ Just "golden value")
-    (return "actual value")
-    (DiffText Nothing)   -- always fail
-    ShowText
-    (const $ return ())  -- keep the golden file no matter what
+-- UNUSED, but KEEP!
+-- testGolden :: TestTree
+-- testGolden =
+--   goldenTest1
+--     "wrongOutput"
+--     (return $ Just "golden value")
+--     (return "actual value")
+--     (DiffText Nothing)   -- always fail
+--     ShowText
+--     (const $ return ())  -- keep the golden file no matter what
 
 -- | Check if resources are properly initialized.
 testWithResource :: TestTree
