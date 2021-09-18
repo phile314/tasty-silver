@@ -274,16 +274,15 @@ showDiff_ useLess n (DiffText _ tGold tAct) =
     putStrLn "Actual value:"
     TIO.putStrLn tAct
 
-
--- | Call external process, feeding given @stdin@ and returning produced @stdout@.
---   Throw exception if @stderr@ is not empty or exit-code is non-zero.
-
-callProcessText :: FilePath -> [String] -> Text -> IO Text
-callProcessText cmd args stdIn = do
-  ret@(exitcode, stdOut, stdErr) <- ProcessText.readProcessWithExitCode cmd args stdIn
-  if exitcode == ExitSuccess && T.null stdErr
-    then return stdOut
-    else fail $ unwords [ "Call to", cmd, "failed:", show ret ]
+-- UNUSED:
+-- -- | Call external process, feeding given @stdin@ and returning produced @stdout@.
+-- --   Throw exception if @stderr@ is not empty or exit-code is non-zero.
+-- callProcessText :: FilePath -> [String] -> Text -> IO Text
+-- callProcessText cmd args stdIn = do
+--   ret@(exitcode, stdOut, stdErr) <- ProcessText.readProcessWithExitCode cmd args stdIn
+--   if exitcode == ExitSuccess && T.null stdErr
+--     then return stdOut
+--     else fail $ unwords [ "Call to", cmd, "failed:", show ret ]
 
 -- | Call external tool @"git" 'gitDiffArgs'@ with given extra arguments, returning its output.
 --   If @git diff@ prints to @stderr@ or returns a exitcode indicating failure, throw exception.
@@ -387,20 +386,24 @@ haveSh :: IO Bool
 haveSh = doesCmdExist "sh"
 
 -- | Ask user whether to accept a new golden value, and run action if yes.
---   If terminal is non-interactive, just assume "yes" always.
 
 tryAccept
   :: String   -- ^ @prefix@ printed at the beginning of each line.
   -> IO ()    -- ^ Action to @update@ golden value.
   -> IO Bool  -- ^ Return decision whether to update the golden value.
 tryAccept prefix update = do
-  termIsInteractive <- hIsTerminalDevice stdin
-  if not termIsInteractive then do
-    putStr prefix
-    putStr "Accepting actual value as new golden value."
-    update
-    return True
-  else do
+  -- Andreas, 2021-09-18
+  -- Accepting by default in batch mode is not the right thing,
+  -- because CI may then falsely accept broken tests.
+  --
+  -- --   If terminal is non-interactive, just assume "yes" always.
+  -- termIsInteractive <- hIsTerminalDevice stdin
+  -- if not termIsInteractive then do
+  --   putStr prefix
+  --   putStr "Accepting actual value as new golden value."
+  --   update
+  --   return True
+  -- else do
     isANSI <- hSupportsANSI stdout
     when isANSI showCursor
     putStr prefix
@@ -940,7 +943,7 @@ computeAlignment opts =
 ok, warn, failure, infoOk, infoWarn, infoFail :: (?colors :: Bool) => String -> IO ()
 ok       = output NormalIntensity Dull  Green
 warn     = output NormalIntensity Dull  Yellow
-failure   = output BoldIntensity   Vivid Red
+failure  = output BoldIntensity   Vivid Red
 infoOk   = output NormalIntensity Dull  White
 infoWarn = output NormalIntensity Dull  White
 infoFail = output NormalIntensity Dull  Red
