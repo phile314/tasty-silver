@@ -24,7 +24,7 @@ import System.IO.Error
 import Test.Tasty.Providers
 import Test.Tasty.Options
 
--- | See 'goldenTest1' for explanation of the fields.
+-- | See 'Test.Tasty.Silver.Advanced.goldenTest1' for explanation of the fields.
 
 data Golden =
   forall a .
@@ -49,7 +49,7 @@ instance IsOption AcceptTests where
   optionHelp = return "Accept current results of golden tests"
   optionCLParser =  flagCLParser Nothing (AcceptTests True)
 
--- | Read the file if it exists, else return Nothing.
+-- | Read the file if it exists, else return 'Nothing'.
 -- Useful for reading golden files.
 
 readFileMaybe :: FilePath -> IO (Maybe SB.ByteString)

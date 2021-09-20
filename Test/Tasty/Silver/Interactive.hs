@@ -159,7 +159,7 @@ runSingleTest _ _ _ opts t cb = do
             GREqual -> return r
             grd -> return $ r { resultOutcome = (Failure $ TestThrewException $ toException $ Mismatch grd) }
 
--- | A simple console UI
+-- | A simple console UI.
 runTestsInteractive :: DisabledTests -> OptionSet -> TestTree -> IO Bool
 runTestsInteractive dis opts tests = do
   let tests' = wrapRunTest (runSingleTest dis) tests

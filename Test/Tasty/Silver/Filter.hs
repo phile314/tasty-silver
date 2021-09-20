@@ -38,6 +38,7 @@ import Test.Tasty hiding (defaultMain)
 import Test.Tasty.Options
 import Test.Tasty.Runners
 
+-- | Path into the 'TestTree'.  Separator is the slash character(@'/'@).
 type TestPath = String
 
 -- we have to store the regex as String, as there is no Typeable instance
@@ -97,9 +98,10 @@ filterWithRegex opts = filterWithPred (checkRF True $ excRgxs ++ incRgxs)
 -- are met:
 -- 1. At least one RFInclude matches.
 -- 2. No RFExclude filter matches.
-checkRF :: Bool -- ^ If true, ignore 1. condition if no RFInclude is given.
+checkRF :: Bool -- ^ If 'True', ignore first condition if no 'RFInclude' is given.
     -> [RegexFilter]
-    -> TestPath -> Bool
+    -> TestPath
+    -> Bool
 checkRF ignNoInc rf tp =
   ((null incRgxs && ignNoInc) || any regexMatches incRgxs)
     && (not $ any regexMatches excRgxs)

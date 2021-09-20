@@ -3,14 +3,14 @@ version:             3.3
 synopsis:            A fancy test runner, including support for golden tests.
 description:
   This package provides a fancy test runner and support for «golden testing».
-
+  .
   A golden test is an IO action that writes its result to a file.
   To pass the test, this output file should be identical to the corresponding
   «golden» file, which contains the correct result for the test.
-
+  .
   The test runner allows filtering tests using regexes, and to interactively
   inspect the result of golden tests.
-
+  .
   This package is a heavily extended fork of tasty-golden.
 
 license:             MIT

@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP #-}
 
 module Test.Tasty.Silver.Advanced
-  ( -- * The main function
+  ( -- * Constructing golden tests
     goldenTest1,
 
     goldenTestIO,
@@ -12,7 +12,7 @@ module Test.Tasty.Silver.Advanced
     GShow (..),
     GDiff (..),
 
-    -- * reading files
+    -- * Reading files
     readFileMaybe
   )
 where

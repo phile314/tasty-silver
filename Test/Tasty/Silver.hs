@@ -3,42 +3,45 @@
 {- |
 This module provides a simplified interface. If you want more, see "Test.Tasty.Silver.Advanced".
 
-Note about filenames. They are looked up in the usual way, thus relative
+=== Note about filenames
+
+They are looked up in the usual way, thus relative
 names are relative to the processes current working directory.
 It is common to run tests from the package's root directory (via @cabal
-test@ or @cabal install --enable-tests@), so if your test files are under
+test@ or @stack test@), so if your test files are under
 the @tests\/@ subdirectory, your relative file names should start with
 @tests\/@ (even if your @test.hs@ is itself under @tests\/@, too).
 
-Note about line endings. The best way to avoid headaches with line endings
+=== Note about line endings
+
+The best way to avoid headaches with line endings
 (when running tests both on UNIX and Windows) is to treat your golden files
 as binary, even when they are actually textual.
 
 This means:
 
 * When writing output files from Haskell code, open them in binary mode
-(see 'openBinaryFile', 'withBinaryFile' and 'hSetBinaryMode'). This will
-disable automatic @\\n -> \\r\\n@ conversion on Windows. For convenience, this
-module exports 'writeBinaryFile' which is just like `writeFile` but opens
-the file in binary mode. When using 'ByteString's note that
+(see 'System.IO.openBinaryFile', 'System.IO.withBinaryFile' and 'System.IO.hSetBinaryMode'). This will
+disable automatic @\\n -> \\r\\n@ conversion on Windows.
+When using 'Data.ByteString.ByteString', note that
 "Data.ByteString" and "Data.ByteString.Lazy" use binary mode for
-@writeFile@, while "Data.ByteString.Char8" and "Data.ByteString.Lazy.Char8"
+@'writeFile'@, while "Data.ByteString.Char8" and "Data.ByteString.Lazy.Char8"
 use text mode.
 
-* Tell your VCS not to do any newline conversion for golden files. For
- git check in a @.gitattributes@ file with the following contents (assuming
+* Tell your version control not to do any newline conversion for golden files. For
+ git, check in a @.gitattributes@ file with the following contents (assuming
  your golden files have @.golden@ extension):
 
 >*.golden	-text
 
-On its side, tasty-golden reads and writes files in binary mode, too.
+On its side, `tasty-silver` reads and writes files in binary mode, too.
 
 Why not let Haskell/git do automatic conversion on Windows? Well, for
 instance, @tar@ will not do the conversion for you when unpacking a release
-tarball, so when you run @cabal install your-package --enable-tests@, the
+tarball, so when you run e.g. @stack install your-package --tests@, the
 tests will be broken.
 
-As a last resort, you can strip all @\\r@s from both arguments in your
+As a last resort, you can strip all @\\r@ characters from both arguments in your
 comparison function when necessary. But most of the time treating the files
 as binary does the job.
 -}
@@ -68,7 +71,7 @@ import System.Exit
 import System.FilePath
 import System.Process.Text as PT
 
-import Test.Tasty.Providers
+import Test.Tasty.Providers (TestTree, TestName)
 import Test.Tasty.Silver.Advanced
 
 -- | Compare a given file contents against the golden file contents. Assumes that both text files are utf8 encoded.
@@ -146,12 +149,11 @@ printProcResult (ex, a, b) = T.unlines (["ret > " `T.append` T.pack (show ex)]
 
 -- | Find all files in the given directory and its subdirectories that have
 -- the given extensions.
---
 -- It is typically used to find all test files and produce a golden test
 -- per test file.
 --
--- The returned paths use forward slashes to separate path components,
--- even on Windows. Thus if the file name ends up in a golden file, it
+-- The returned paths use forward slashes (@'/'@) to separate path components,
+-- /even on Windows/. Thus if the file name ends up in a golden file, it
 -- will not differ when run on another platform.
 --
 -- The semantics of extensions is the same as in 'takeExtension'. In
@@ -162,7 +164,6 @@ printProcResult (ex, a, b) = T.unlines (["ret > " `T.append` T.pack (show ex)]
 --
 -- It doesn't do anything special to handle symlinks (in particular, it
 -- probably won't work on symlink loops).
---
 -- Nor is it optimized to work with huge directory trees (you'd probably
 -- want to use some form of coroutines for that).
 findByExtension
