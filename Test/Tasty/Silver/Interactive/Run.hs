@@ -7,12 +7,14 @@ module Test.Tasty.Silver.Interactive.Run
   )
   where
 
-import Test.Tasty hiding (defaultMain)
-import Test.Tasty.Runners
-import Test.Tasty.Options
-import Data.Typeable
 import Data.Tagged
+import Data.Typeable
+
+import Test.Tasty hiding (defaultMain)
+import Test.Tasty.Options
 import Test.Tasty.Providers
+import Test.Tasty.Runners
+import Test.Tasty.Silver.Filter ( TestPath )
 
 data CustomTestExec t = IsTest t => CustomTestExec t (OptionSet -> t -> (Progress -> IO ()) -> IO Result)
   deriving (Typeable)
@@ -21,10 +23,9 @@ instance IsTest t => IsTest (CustomTestExec t) where
   run opts (CustomTestExec t r) cb = r opts t cb
   testOptions = retag $ (testOptions :: Tagged t [OptionDescription])
 
-type TestPath = String
-
 -- | Provide new test run function wrapping the existing tests.
-wrapRunTest :: (forall t . IsTest t => TestPath -> TestName -> OptionSet -> t -> (Progress -> IO ()) -> IO Result)
+wrapRunTest
+    :: (forall t . IsTest t => TestPath -> TestName -> OptionSet -> t -> (Progress -> IO ()) -> IO Result)
     -> TestTree
     -> TestTree
 wrapRunTest = wrapRunTest' "/"
