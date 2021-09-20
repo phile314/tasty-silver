@@ -1,12 +1,13 @@
 Changes
 =======
 
-Version 3.3 (unreleased)
-------------------------
+Version 3.3 (20 Sep 2021)
+-----------
 
 * Windows portability (#16):
   - Calls to `git diff` are no longer indirected via `sh -c`.
   - When indirection via `sh -c` is used, backslashes in filenames are converted to slashes.
+* Tested with GHC 7.4 - 9.2.1-RC1
 
 Version 3.2.3 (13 Sep 2021)
 -------------
