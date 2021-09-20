@@ -1,5 +1,5 @@
 name:                tasty-silver
-version:             3.2.3
+version:             3.3
 synopsis:            A fancy test runner, including support for golden tests.
 description:
   This package provides a fancy test runner and support for «golden testing».
@@ -29,8 +29,9 @@ extra-source-files:
   README.md
 
 tested-with:
+  GHC == 9.2.0.20210821
   GHC == 9.0.1
-  GHC == 8.10.4
+  GHC == 8.10.7
   GHC == 8.8.4
   GHC == 8.6.5
   GHC == 8.4.4
