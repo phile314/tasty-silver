@@ -223,7 +223,10 @@ showDiff_ useLess n (DiffText _ tGold tAct) =
     withDiffEnv n tGold tAct $ \ fGold fAct -> do
       -- Unless we use `less`, we simply call `git` directly.
       if not useLess
-        then TIO.putStrLn =<< callGitDiff [ fGold, fAct ]
+        then do
+          (out, err) <- callGitDiff [ fGold, fAct ]
+          TIO.putStrLn err
+          TIO.putStrLn out
         else callCommand $ unwords
             [ "git"
             , unwords gitDiffArgs
@@ -274,34 +277,25 @@ showDiff_ useLess n (DiffText _ tGold tAct) =
     putStrLn "Actual value:"
     TIO.putStrLn tAct
 
--- UNUSED:
--- -- | Call external process, feeding given @stdin@ and returning produced @stdout@.
--- --   Throw exception if @stderr@ is not empty or exit-code is non-zero.
--- callProcessText :: FilePath -> [String] -> Text -> IO Text
--- callProcessText cmd args stdIn = do
---   ret@(exitcode, stdOut, stdErr) <- ProcessText.readProcessWithExitCode cmd args stdIn
---   if exitcode == ExitSuccess && T.null stdErr
---     then return stdOut
---     else fail $ unwords [ "Call to", cmd, "failed:", show ret ]
-
 -- | Call external tool @"git" 'gitDiffArgs'@ with given extra arguments, returning its output.
 --   If @git diff@ prints to @stderr@ or returns a exitcode indicating failure, throw exception.
 
 callGitDiff
-  :: [String]  -- ^ File arguments to @git diff@.
-  -> IO Text   -- ^ @stdout@ produced by the call.
+  :: [String]
+       -- ^ File arguments to @git diff@.
+  -> IO (Text, Text)
+       -- ^ @stdout@ and @stderr@ produced by the call.
 callGitDiff args = do
   ret@(exitcode, stdOut, stdErr) <-
     ProcessText.readProcessWithExitCode
       "git" (gitDiffArgs ++ args) T.empty
-  if T.null stdErr then
-    case exitcode of
-      ExitSuccess   -> return stdOut
-      -- With option --no-index, exitcode 1 indicates that files are different.
-      ExitFailure 1 -> return stdOut
-      -- Other failure codes indicate that something went wrong.
-      ExitFailure _ -> gitFailed $ show ret
-  else gitFailed $ T.unpack stdErr
+  let done = return (stdOut, stdErr)
+  case exitcode of
+    ExitSuccess   -> done
+    -- With option --no-index, exitcode 1 indicates that files are different.
+    ExitFailure 1 -> done
+    -- Other failure codes indicate that something went wrong.
+    ExitFailure _ -> gitFailed $ show ret
   where
   gitFailed msg = fail $ "Call to `git diff` failed: " ++ msg
 

@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 3.3.1 (13 Oct 2021)
+-------------
+
+* No longer treat `git diff` warnings as failure (#33)
+
 Version 3.3 (20 Sep 2021)
 -----------
 
