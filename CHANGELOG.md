@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 3.3.1.1 (8 May 2022)
+---------------
+
+* Fix compilation with `mtl-2.3`
+* Tested with GHC 7.4 - 9.2.2
+
 Version 3.3.1 (13 Oct 2021)
 -------------
 

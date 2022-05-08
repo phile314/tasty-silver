@@ -32,6 +32,7 @@ import Prelude
 
 import Control.Concurrent.STM.TVar
 import Control.Exception
+import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Reader
 import Control.Monad.STM
