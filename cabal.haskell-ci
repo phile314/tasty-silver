@@ -1,1 +1,2 @@
 installed: +all -bytestring -directory -process
+branches: master ci-* release*
