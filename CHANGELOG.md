@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 3.3.1.2 (10 Sep 2023)
+---------------
+
+* Fix compilation with `tasty-1.5`
+* Tested with GHC 7.4 - 9.8.0
+
 Version 3.3.1.1 (8 May 2022)
 ---------------
 

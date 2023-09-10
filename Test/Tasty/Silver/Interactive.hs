@@ -578,7 +578,11 @@ produceOutput opts tree =
       foldTestTree
         trivialFold
           { foldSingle = handleSingleTest
-          , foldGroup = handleGroup
+#if MIN_VERSION_tasty(1,5,0)
+          , foldGroup = \ opts name -> foldMap (handleGroup opts name)
+#else
+          , foldGroup = \ opts name -> id      (handleGroup opts name)
+#endif
           }
           opts tree
 
@@ -917,22 +921,34 @@ instance Ord a => Monoid (Maximum a) where
   mempty = MinusInfinity
   mappend = (<>)
 
-
--- | Compute the amount of space needed to align "OK"s and "FAIL"s
+-- | Compute the amount of space needed to align "OK"s and "FAIL"s.
+--
 computeAlignment :: OptionSet -> TestTree -> Int
 computeAlignment opts =
-  fromMonoid .
-  foldTestTree
-    trivialFold
-      { foldSingle = \_ name _ level -> Maximum (length name + level)
-      , foldGroup = \_ _ m -> m . (+ indentSize)
-      }
-    opts
+  fromMonoid . foldTestTree f opts
   where
+    fromMonoid :: (Int -> Maximum Int) -> Int
     fromMonoid m =
       case m 0 of
         MinusInfinity -> 0
         Maximum x -> x
+
+    f :: TreeFold (Int -> Maximum Int)
+    f = trivialFold
+      { foldSingle = \ _opts  name _test level -> addName   name level
+      , foldGroup  = \ _opts _name group level -> addIndent level group
+      }
+
+    addName :: TestName -> Int -> Maximum Int
+    addName name level = Maximum $ length name + level
+
+#if MIN_VERSION_tasty(1,5,0)
+    addIndent :: Int -> [Int -> Maximum Int] -> Maximum Int
+    addIndent level = foldMap ($ (level + indentSize))
+#else
+    addIndent :: Int -> (Int -> Maximum Int) -> Maximum Int
+    addIndent level = id      ($ (level + indentSize))
+#endif
 
 -- (Potentially) colorful output
 ok, warn, failure, infoOk, infoWarn, infoFail :: (?colors :: Bool) => String -> IO ()

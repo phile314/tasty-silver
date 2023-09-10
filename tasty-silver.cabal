@@ -1,6 +1,6 @@
 cabal-version:       1.14
 name:                tasty-silver
-version:             3.3.1.1
+version:             3.3.1.2
 synopsis:            A fancy test runner, including support for golden tests.
 description:
   This package provides a fancy test runner and support for «golden testing».
@@ -48,7 +48,7 @@ tested-with:
 
 Source-repository head
   type:     git
-  location: git://github.com/phile314/tasty-silver.git
+  location: https://github.com/phile314/tasty-silver.git
 
 library
   Default-language:
