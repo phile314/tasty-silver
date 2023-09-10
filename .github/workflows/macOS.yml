@@ -29,11 +29,11 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: recursive
 
-    - uses: haskell/actions/setup@v1
+    - uses: haskell-actions/setup@v2
       id: setup-haskell
       with:
         ghc-version:   latest
@@ -44,7 +44,7 @@ jobs:
         cabal update
         cabal configure -O1 --enable-tests
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       name: Cache dependencies
       id: cache
       with:
@@ -56,7 +56,7 @@ jobs:
     - name: Install dependencies
       if: ${{ !steps.cache.outputs.cache-hit }}
       run: |
-        cabal build --only-dependencies --enable-tests
+        cabal build --only-dependencies
 
     - name: Build
       run: |
