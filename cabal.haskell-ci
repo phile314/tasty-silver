@@ -1,2 +1,4 @@
-installed: +all -bytestring -directory -process
-branches: master ci-* release*
+branches: master
+
+installed: +all
+-- installed: +all -bytestring -directory -process
