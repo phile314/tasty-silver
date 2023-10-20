@@ -565,12 +565,12 @@ produceOutput opts tree =
       let handleTestResult' = (if isInteractive then handleTestResultInteractive else handleTestResult)
       return $ HandleTest name printTestName handleTestResult'
 
-    handleGroup :: OptionSet -> TestName -> Ap (Reader Level) TestOutput -> Ap (Reader Level) TestOutput
+    handleGroup :: OptionSet -> TestName -> [Ap (Reader Level) TestOutput] -> Ap (Reader Level) TestOutput
     handleGroup _ name grp = Ap $ do
       level <- ask
       let
         printHeading = printf "%s%s\n" (indent level) name
-        printBody = runReader (getApp grp) (level + 1)
+        printBody = runReader (getApp $ mconcat grp) (level + 1)
       return $ PrintHeading printHeading printBody
 
   in
@@ -579,9 +579,9 @@ produceOutput opts tree =
         trivialFold
           { foldSingle = handleSingleTest
 #if MIN_VERSION_tasty(1,5,0)
-          , foldGroup = \ opts name -> foldMap (handleGroup opts name)
+          , foldGroup = \ opts name ts -> handleGroup opts name ts
 #else
-          , foldGroup = \ opts name -> id      (handleGroup opts name)
+          , foldGroup = \ opts name t  -> handleGroup opts name [t]
 #endif
           }
           opts tree

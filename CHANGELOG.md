@@ -1,11 +1,16 @@
 Changes
 =======
 
-Unreleased
-----------
+Version 3.3.1.3 (20 Oct 2023)
+---------------
 
+_Dedicated to Anne-Christine. Happy birthday!_
+
+* Fix test reporting when built with `tasty-1.5`
+  (regression in 3.3.1.2, see [#41](https://github.com/phile314/tasty-silver/issues/41)).
 * `filterWithRedex` is now the identity if no inclusion/exclusion regexes are given in the options.
-* Drop support for GHC 7.4
+* Drop support for GHC 7.4 for the sake of `LambdaCase`.
+* Tested with GHC 8.0 - 9.8.1.
 
 Version 3.3.1.2 (10 Sep 2023)
 ---------------
