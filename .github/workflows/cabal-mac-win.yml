@@ -1,11 +1,9 @@
-name: macOS
+name: Cabal (macOS and Windows)
 
 on:
   push:
     branches:
     - master
-    - ci-*
-    - release*
     paths:
     - '.github/workflows/macOS.yml'
     - 'tasty-silver.cabal'
@@ -26,10 +24,13 @@ defaults:
 
 jobs:
   build-and-test:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: { os: [macos-latest, windows-latest] }
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -38,25 +39,34 @@ jobs:
       with:
         ghc-version:   latest
         cabal-version: latest
+        cabal-update:  true
 
     - name: Configure the build plan
       run: |
-        cabal update
         cabal configure -O1 --enable-tests
 
-    - uses: actions/cache@v3
-      name: Cache dependencies
+    - name: Restore cached dependencies
+      uses: actions/cache/restore@v3
       id: cache
+      env:
+        key: ${{ runner.os }}-cabal-${{ steps.setup-haskell.outputs.cabal-version }}-ghc-${{ steps.setup-haskell.outputs.ghc-version }}
       with:
-        path: |
-          ${{ steps.setup-haskell.outputs.cabal-store }}
+        path: ${{ steps.setup-haskell.outputs.cabal-store }}
         # The file `plan.json` contains the build information.
-        key: macOS-${{ hashFiles('**/plan.json') }}
+        key:          ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+        restore-keys: ${{ env.key }}-
 
     - name: Install dependencies
-      if: ${{ !steps.cache.outputs.cache-hit }}
+      if:   ${{ steps.cache.outputs.cache-hit != 'true' }}
       run: |
         cabal build --only-dependencies
+
+    - name: Cache dependencies
+      uses: actions/cache/save@v3
+      if:   ${{ steps.cache.outputs.cache-hit != 'true' }}
+      with:
+        path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        key:  ${{ steps.cache.outputs.cache-primary-key }}
 
     - name: Build
       run: |
