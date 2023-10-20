@@ -86,10 +86,17 @@ parseValue1 :: (String -> RegexFilter) -> String -> Maybe [RegexFilter]
 parseValue1 f x = fmap (const [f x]) $ compileRegex x
 
 filterWithRegex :: OptionSet -> TestTree -> TestTree
-filterWithRegex opts = filterWithPred (checkRF True $ excRgxs ++ incRgxs)
-  where ExcludeFilters excRgxs = lookupOption opts
-        IncludeFilters incRgxs = lookupOption opts
-
+filterWithRegex opts =
+  -- Andreas, 2023-10-20: Since @filterWithPred (const True)@ is not the identity
+  -- when the test tree contains 'WithResource' etc.,
+  -- we skip it if it does not actually filter out anything.
+  if null filters
+    then id
+    else filterWithPred (checkRF True filters)
+  where
+    ExcludeFilters excRgxs = lookupOption opts
+    IncludeFilters incRgxs = lookupOption opts
+    filters = excRgxs ++ incRgxs
 
 -- | Check if the given path should be kept using regex filters.
 -- A Tree leaf is retained if the following conditions
