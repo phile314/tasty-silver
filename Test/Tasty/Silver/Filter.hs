@@ -44,17 +44,15 @@ type TestPath = String
 -- we have to store the regex as String, as there is no Typeable instance
 -- for the Regex data type with GHC < 7.8
 data RegexFilter
-  = RFInclude String -- include tests that match
-  | RFExclude String -- exclude tests that match
+  = RFInclude String -- ^ Include tests that match.
+  | RFExclude String -- ^ Exclude tests that match.
   deriving (Typeable)
 
--- | Tests to completely exlucde, treating them
--- like they do not exist.
+-- | Tests to completely exclude, treating them like they do not exist.
 newtype ExcludeFilters = ExcludeFilters [RegexFilter]
   deriving (Typeable)
 
--- | Tests to completely include, treating all
--- other tests like they do not exist.
+-- | Tests to completely include, treating all other tests like they do not exist.
 newtype IncludeFilters = IncludeFilters [RegexFilter]
   deriving (Typeable)
 
@@ -85,7 +83,7 @@ parseFilter mkRF mkV = mkV <$> some ( option parse ( long name <> help helpStrin
         <$> RS.compile R.defaultCompOpt R.defaultExecOpt)
 
 parseValue1 :: (String -> RegexFilter) -> String -> Maybe [RegexFilter]
-parseValue1 f x = fmap (const $ [f x]) $ compileRegex x
+parseValue1 f x = fmap (const [f x]) $ compileRegex x
 
 filterWithRegex :: OptionSet -> TestTree -> TestTree
 filterWithRegex opts = filterWithPred (checkRF True $ excRgxs ++ incRgxs)
