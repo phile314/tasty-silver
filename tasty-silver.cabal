@@ -43,8 +43,6 @@ tested-with:
   GHC == 7.10.3
   GHC == 7.8.4
   GHC == 7.6.3
-  GHC == 7.4.2
-  -- GHC 7.0 is not supported by regex-tdfa, needing array >= 0.4
 
 Source-repository head
   type:     git
@@ -53,6 +51,8 @@ Source-repository head
 library
   Default-language:
     Haskell2010
+  Default-extensions:
+    LambdaCase
   exposed-modules:     Test.Tasty.Silver
                        Test.Tasty.Silver.Advanced
                        Test.Tasty.Silver.Filter
@@ -67,8 +67,8 @@ library
       -Wcompat
 
   build-depends:
-      base           >= 4.5 && < 5
-        -- regex-tdfa has this lower bound on base, so we make it explicit here
+      base           >= 4.6 && < 5
+        -- LambdaCase supported since GHC 7.6 (base-4.6)
     , ansi-terminal  >= 0.6.2.1
     , async
     , bytestring     >= 0.9.2.1

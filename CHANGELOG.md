@@ -1,6 +1,11 @@
 Changes
 =======
 
+Unreleased
+----------
+
+* Drop support for GHC 7.4
+
 Version 3.3.1.2 (10 Sep 2023)
 ---------------
 

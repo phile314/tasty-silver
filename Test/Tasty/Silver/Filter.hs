@@ -118,17 +118,19 @@ checkRF ignNoInc rf tp =
 
 
 filterWithPred :: (TestPath -> Bool) -> TestTree -> TestTree
-filterWithPred prd tree = fromMaybe emptyTest (filter' "/" tree)
-  where x <//> y = x ++ "/" ++ y
+filterWithPred f tree = fromMaybe emptyTest $ filter' "/" tree
+  where
+    filter' :: TestPath -> TestTree -> Maybe TestTree
+    filter' path = \case
+      SingleTest n t      -> if f (path <//> n) then Just $ SingleTest n t else Nothing
+      TestGroup n ts      -> Just $ TestGroup n $ mapMaybe (filter' $ path <//> n) ts
+      PlusTestOptions o t -> PlusTestOptions o <$> filter' path t
+      -- we don't know at tree construction time what the tree wrapped inside an AskOptions/WithResource
+      -- is going to look like. We always return something, and just return an empty test group
+      -- if later on we see that the child subtree was excluded.
+      WithResource r t    -> Just $ WithResource r $ \ x -> fromMaybe emptyTest $ filter' path $ t x
+      AskOptions t        -> Just $ AskOptions     $ \ o -> fromMaybe emptyTest $ filter' path $ t o
 
-        filter' :: TestPath -> TestTree -> Maybe TestTree
-        filter' pth (SingleTest n t) = if prd (pth <//> n) then Just $ SingleTest n t else Nothing
-        filter' pth (TestGroup n ts) = Just $ TestGroup n (catMaybes $ map (filter' $ pth <//> n) ts)
-        filter' pth (PlusTestOptions o t) = PlusTestOptions o <$> filter' pth t
-        -- we don't know at tree construction time what the tree wrapped inside an AskOptions/WithResource
-        -- is going to look like. We always return something, and just return an empty test group
-        -- if later on we see that the child subtree was excluded.
-        filter' pth (WithResource r t) = Just $ WithResource r (\x -> fromMaybe emptyTest (filter' pth (t x)))
-        filter' pth (AskOptions t) = Just $ AskOptions (\o -> fromMaybe emptyTest (filter' pth (t o)))
+    x <//> y = x ++ "/" ++ y
 
-        emptyTest = testGroup "" []
+    emptyTest = testGroup "" []
