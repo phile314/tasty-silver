@@ -453,6 +453,8 @@ produceOutput opts tree =
     -- Do not retain the reference to the tree more than necessary
     !alignment = computeAlignment opts tree
     Interactive isInteractive = lookupOption opts
+    -- We always print timing in non-interactive mode
+    forceTime = not isInteractive
 
     handleSingleTest
       :: (IsTest t, ?colors :: Bool)
@@ -465,7 +467,7 @@ produceOutput opts tree =
         pref = indent level ++ replicate (length name) ' ' ++ "  " ++ align
         printTestName =
           printf "%s%s: %s" (indent level) name align
-        printResultLine result forceTime = do
+        printResultLine result = do
           -- use an appropriate printing function
           let
             resTy = getResultType result
@@ -488,7 +490,7 @@ produceOutput opts tree =
           -- as using the interactive layout doesn't go that well
           -- with printing the diffs to stdout.
           --
-          printResultLine result True
+          printResultLine result
 
           rDesc <- formatMessage $ resultDescription result
           when (not $ null rDesc) $ (case getResultType result of
@@ -506,7 +508,7 @@ produceOutput opts tree =
             Failure (TestThrewException e) ->
               case fromException e of
                 Just (Mismatch (GRDifferent _ _ _ Nothing)) -> do
-                  printResultLine result False
+                  printResultLine result
                   s <- printTestOutput pref name result
                   return (testFailed "", s)
                 Just (Mismatch (GRNoGolden a shw (Just upd))) -> do
@@ -522,7 +524,7 @@ produceOutput opts tree =
                              , mempty { statCreatedGolden = 1 } )
                         else ( testFailed "Golden value missing."
                              , mempty { statFailures = 1 } )
-                  printResultLine (fst r) False
+                  printResultLine (fst r)
                   return r
                 Just (Mismatch (GRDifferent _ a diff (Just upd))) -> do
                   printf "Golden value differs from actual value.\n"
@@ -534,21 +536,21 @@ produceOutput opts tree =
                              , mempty { statUpdatedGolden = 1 } )
                         else ( testFailed "Golden value does not match actual output."
                              , mempty { statFailures = 1 } )
-                  printResultLine (fst r) False
+                  printResultLine (fst r)
                   return r
                 Just (Mismatch _) -> error "Impossible case!"
                 Just Disabled -> do
-                  printResultLine result False
+                  printResultLine result
                   return ( result
                          , mempty { statDisabled = 1 } )
                 Nothing -> do
-                  printResultLine result False
+                  printResultLine result
                   return (result, mempty {statFailures = 1})
             Success -> do
-              printResultLine result False
+              printResultLine result
               return (result, mempty { statSuccesses = 1 })
             Failure _ -> do
-              printResultLine result False
+              printResultLine result
               return (result, mempty { statFailures = 1 })
 
           let result'' = result' { resultTime = resultTime result }
