@@ -503,41 +503,40 @@ produceOutput opts tree =
 
           return stat'
 
+        possiblyAccept msgPass msgFail updater = do
+          isUpd <- tryAccept pref updater
+          let r =
+                if isUpd
+                then ( testPassed msgPass
+                     , mempty { statCreatedGolden = 1 } )
+                else ( testFailed msgFail
+                     , mempty { statFailures = 1 } )
+          printResultLine (fst r)
+          return r
+
         handleTestResultInteractive result = do
-          (result', stat') <- case (resultOutcome result) of
+          (result', stat') <- case resultOutcome result of
             Failure (TestThrewException e) ->
               case fromException e of
+
                 Just (Mismatch (GRDifferent _ _ _ Nothing)) -> do
                   printResultLine result
                   s <- printTestOutput pref name result
                   return (testFailed "", s)
-                Just (Mismatch (GRNoGolden a shw (Just upd))) -> do
+
+                Just (Mismatch (GRNoGolden (Identity a) shw (Just upd))) -> do
                   printf "Golden value missing. Press <enter> to show actual value.\n"
                   _ <- getLine
-                  let a' = runIdentity a
-                  shw' <- shw a'
-                  showValue name shw'
-                  isUpd <- tryAccept pref $ upd a'
-                  let r =
-                        if isUpd
-                        then ( testPassed "Created golden value."
-                             , mempty { statCreatedGolden = 1 } )
-                        else ( testFailed "Golden value missing."
-                             , mempty { statFailures = 1 } )
-                  printResultLine (fst r)
-                  return r
+                  showValue name =<< shw a
+                  possiblyAccept "Created golden value." "Golden value missing." $
+                    upd a
+
                 Just (Mismatch (GRDifferent _ a diff (Just upd))) -> do
                   printf "Golden value differs from actual value.\n"
                   showDiff name diff
-                  isUpd <- tryAccept pref $ upd a
-                  let r =
-                        if isUpd
-                        then ( testPassed "Updated golden value."
-                             , mempty { statUpdatedGolden = 1 } )
-                        else ( testFailed "Golden value does not match actual output."
-                             , mempty { statFailures = 1 } )
-                  printResultLine (fst r)
-                  return r
+                  possiblyAccept "Updated golden value." "Golden value does not match actual output." $
+                    upd a
+
                 Just (Mismatch _) -> error "Impossible case!"
                 Just Disabled -> do
                   printResultLine result
