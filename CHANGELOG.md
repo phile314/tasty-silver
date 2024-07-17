@@ -1,6 +1,21 @@
 Changes
 =======
 
+Version 3.3.2 (18 Jul 2024)
+-------------
+
+* Make `--accept` work (closes [#24](https://github.com/phile314/tasty-silver/issues/24)).
+  With this flag the golden value will automatically get updated.
+
+  It is possible to run `--accept` together with `--interactive`
+  although this combination does not make much sense.
+  (This will show the diff interactively but then just update the golden value.)
+
+  The fix of `--accept` unifies the code for interactive and non-interactive test runs
+  and might have introduced changes in the test output formatting.
+
+* Tested with GHC 8.0 - 9.10.1.
+
 Version 3.3.1.3 (20 Oct 2023)
 ---------------
 
