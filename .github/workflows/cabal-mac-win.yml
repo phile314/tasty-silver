@@ -1,18 +1,17 @@
-name: Cabal (macOS and Windows)
-
+name: Cabal
 on:
   push:
     branches:
     - master
     paths:
-    - '.github/workflows/macOS.yml'
+    - '.github/workflows/cabal-mac-win.yml'
     - 'tasty-silver.cabal'
     - 'Setup.hs'
     - 'Test/**.hs'
     - 'tests/**'
   pull_request:
     paths:
-    - '.github/workflows/macOS.yml'
+    - '.github/workflows/cabal-mac-win.yml'
     - 'tasty-silver.cabal'
     - 'Setup.hs'
     - 'Test/**.hs'
@@ -23,11 +22,12 @@ defaults:
     shell: bash
 
 jobs:
-  build-and-test:
+  build:
+    name: Cabal ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix: { os: [macos-latest, windows-latest] }
+      matrix: { os: [macos-latest, ubuntu-latest, windows-latest] }
 
     steps:
     - uses: actions/checkout@v4
@@ -44,9 +44,10 @@ jobs:
     - name: Configure the build plan
       run: |
         cabal configure -O1 --enable-tests
+        cabal build --dry-run
 
     - name: Restore cached dependencies
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       id: cache
       env:
         key: ${{ runner.os }}-cabal-${{ steps.setup-haskell.outputs.cabal-version }}-ghc-${{ steps.setup-haskell.outputs.ghc-version }}
@@ -62,8 +63,8 @@ jobs:
         cabal build --only-dependencies
 
     - name: Cache dependencies
-      uses: actions/cache/save@v3
-      if:   ${{ steps.cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      if:   always() && steps.cache.outputs.cache-hit != 'true'
       with:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
         key:  ${{ steps.cache.outputs.cache-primary-key }}
@@ -72,6 +73,14 @@ jobs:
       run: |
         cabal build
 
-    - name: Test
+    - name: Test non-interactive
       run: |
-        cabal test --test-show-details=direct --test-options=-i
+        cabal test --test-show-details=direct
+
+    - name: Test --interactive
+      run: |
+        cabal test --test-show-details=direct --test-options=--interactive
+
+    - name: Test --accept
+      run: |
+        cabal test --test-show-details=direct --test-options=--accept
