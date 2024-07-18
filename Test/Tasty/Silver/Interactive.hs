@@ -182,8 +182,7 @@ runTestsInteractive dis opts tests = do
       let
         ?colors = useColor whenColor isTerm
 
-      let
-        outp = produceOutput opts tests
+      outp <- produceOutput opts tests
 
       stats <- case () of { _
         | hideSuccesses && isTerm && ansiTricks ->
@@ -204,11 +203,6 @@ printDiff :: TestName -> GDiff -> IO ()
 printDiff = showDiff_ False
 
 -- | Like 'printDiff', but uses @less@ if available.
-
-showDiff :: TestName -> GDiff -> IO ()
-showDiff n d = do
-  useLess <- useLess
-  showDiff_ useLess n d
 
 showDiff_ :: Bool -> TestName -> GDiff -> IO ()
 showDiff_ _       _ Equal                   = error "Can't show diff for equal values."
@@ -447,15 +441,19 @@ instance Monoid TestOutput where
 
 type Level = Int
 
-produceOutput :: (?colors :: Bool) => OptionSet -> TestTree -> TestOutput
-produceOutput opts tree =
+produceOutput :: (?colors :: Bool) => OptionSet -> TestTree -> IO TestOutput
+produceOutput opts tree = do
   let
     -- Do not retain the reference to the tree more than necessary
     !alignment = computeAlignment opts tree
     Interactive isInteractive = lookupOption opts
+    AcceptTests accept        = lookupOption opts
     -- We always print timing in non-interactive mode
     forceTime = not isInteractive
+  -- In batch mode, we never use 'less' to show result.
+  useLess <- if isInteractive then useLess else pure False
 
+  let
     handleSingleTest
       :: (IsTest t, ?colors :: Bool)
       => OptionSet -> TestName -> t -> Ap (Reader Level) TestOutput
@@ -467,6 +465,7 @@ produceOutput opts tree =
         pref = indent level ++ replicate (length name) ' ' ++ "  " ++ align
         printTestName =
           printf "%s%s: %s" (indent level) name align
+
         printResultLine result = do
           -- use an appropriate printing function
           let
@@ -484,27 +483,11 @@ produceOutput opts tree =
             printFn (printf " (%.2fs)" $ resultTime result)
           printFn "\n"
 
-
-        handleTestResult result = do
-          -- non-interactive mode. Uses different order of printing,
-          -- as using the interactive layout doesn't go that well
-          -- with printing the diffs to stdout.
-          --
-          printResultLine result
-
-          rDesc <- formatMessage $ resultDescription result
-          when (not $ null rDesc) $ (case getResultType result of
-            RTSuccess -> infoOk
-            RTIgnore -> infoWarn
-            RTFail -> infoFail) $
-              printf "%s%s\n" pref (formatDesc (level+1) rDesc)
-
-          stat' <- printTestOutput pref name result
-
-          return stat'
-
-        possiblyAccept msgPass msgFail updater = do
-          isUpd <- tryAccept pref updater
+        possiblyAccept msgPass msgFail update = do
+          isUpd <- if isInteractive then tryAccept pref update else do
+            putStr pref
+            when accept update
+            pure accept
           let r =
                 if isUpd
                 then ( testPassed msgPass
@@ -514,28 +497,39 @@ produceOutput opts tree =
           printResultLine (fst r)
           return r
 
-        handleTestResultInteractive result = do
+        handleTestResult result = do
           (result', stat') <- case resultOutcome result of
             Failure (TestThrewException e) ->
               case fromException e of
 
-                Just (Mismatch (GRDifferent _ _ _ Nothing)) -> do
-                  printResultLine result
-                  s <- printTestOutput pref name result
-                  return (testFailed "", s)
-
                 Just (Mismatch (GRNoGolden (Identity a) shw (Just upd))) -> do
-                  printf "Golden value missing. Press <enter> to show actual value.\n"
-                  _ <- getLine
-                  showValue name =<< shw a
+                  if isInteractive then do
+                    printf "Golden value missing. Press <enter> to show actual value.\n"
+                    _ <- getLine
+                    showValue name =<< shw a
+                  else do
+                    infoFail $ printf "%sActual value is:\n" pref
+                    hsep
+                    printValue name =<< shw a
+                    hsep
                   possiblyAccept "Created golden value." "Golden value missing." $
                     upd a
 
                 Just (Mismatch (GRDifferent _ a diff (Just upd))) -> do
                   printf "Golden value differs from actual value.\n"
-                  showDiff name diff
+                  unless useLess hsep
+                  showDiff_ useLess name diff
+                  unless useLess hsep
                   possiblyAccept "Updated golden value." "Golden value does not match actual output." $
                     upd a
+
+                Just (Mismatch (GRDifferent _ _ diff Nothing)) -> do
+                  printResultLine result
+                  infoFail $ printf "%sDiff between actual and golden value:\n" pref
+                  hsep
+                  printDiff name diff
+                  hsep
+                  return (testFailed "", mempty { statFailures = 1 })
 
                 Just (Mismatch _) -> error "Impossible case!"
                 Just Disabled -> do
@@ -563,8 +557,7 @@ produceOutput opts tree =
 
           return stat'
 
-      let handleTestResult' = (if isInteractive then handleTestResultInteractive else handleTestResult)
-      return $ HandleTest name printTestName handleTestResult'
+      return $ HandleTest name printTestName handleTestResult
 
     handleGroup :: OptionSet -> TestName -> [Ap (Reader Level) TestOutput] -> Ap (Reader Level) TestOutput
     handleGroup _ name grp = Ap $ do
@@ -574,8 +567,8 @@ produceOutput opts tree =
         printBody = runReader (getApp $ mconcat grp) (level + 1)
       return $ PrintHeading printHeading printBody
 
-  in
-    flip runReader 0 $ getApp $
+
+  return $ flip runReader 0 $ getApp $
       foldTestTree
         trivialFold
           { foldSingle = handleSingleTest
@@ -586,30 +579,6 @@ produceOutput opts tree =
 #endif
           }
           opts tree
-
-printTestOutput :: (?colors :: Bool) => String -> TestName -> Result -> IO Statistics
-printTestOutput prefix name result = case resultOutcome result of
-  Failure (TestThrewException e) ->
-    case fromException e of
-      Just (Mismatch (GRNoGolden a shw _)) -> do
-        infoFail $ printf "%sActual value is:\n" prefix
-        let a' = runIdentity a
-        shw' <- shw a'
-        hsep
-        printValue name shw'
-        hsep
-        return ( mempty { statFailures = 1 } )
-      Just (Mismatch (GRDifferent _ _ diff _)) -> do
-        infoFail $ printf "%sDiff between actual and golden value:\n" prefix
-        hsep
-        printDiff name diff
-        hsep
-        return ( mempty { statFailures = 1 } )
-      Just (Mismatch _) -> error "Impossible case!"
-      Just Disabled -> return ( mempty { statDisabled = 1 } )
-      Nothing -> return ( mempty { statFailures = 1 } )
-  Failure _ -> return ( mempty { statFailures = 1 } )
-  Success -> return ( mempty { statSuccesses = 1 } )
 
 hsep :: IO ()
 hsep = putStrLn (replicate 40 '=')
